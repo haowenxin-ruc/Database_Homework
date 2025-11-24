@@ -1,129 +1,135 @@
+<!-- [file name]: index.html -->
 {% extends "base.html" %}
 
-{% block title %}首页{% endblock %}
+{% block title %}仪表盘{% endblock %}
 
 {% block content %}
-<div class="row">
+<div class="row mb-4">
     <div class="col-12">
-        <h1 class="mb-4">数据汇总工具</h1>
-        <p class="lead">为学院科研秘书提供高效的数据收集和汇总解决方案</p>
+        <h2 class="fw-bold text-dark">工作台概览</h2>
+        <p class="text-muted">欢迎回来，今日科研数据收集进展如下</p>
     </div>
 </div>
 
-<div class="row mt-4">
+<!-- 统计卡片 -->
+<div class="row g-4 mb-4">
     <div class="col-md-3">
-        <div class="card text-white bg-primary mb-3">
+        <div class="card bg-primary text-white h-100">
             <div class="card-body">
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h4>{{ teacher_count }}</h4>
-                        <p>教师数量</p>
+                        <h6 class="text-white-50">教师总数</h6>
+                        <h2 class="mb-0 fw-bold">{{ teacher_count }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-users fa-2x"></i>
-                    </div>
+                    <i class="fas fa-users fa-3x text-white-50"></i>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
-        <div class="card text-white bg-success mb-3">
+        <div class="card bg-success text-white h-100">
             <div class="card-body">
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h4>{{ task_count }}</h4>
-                        <p>汇总任务</p>
+                        <h6 class="text-white-50">进行中任务</h6>
+                        <h2 class="mb-0 fw-bold">{{ task_count }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-tasks fa-2x"></i>
-                    </div>
+                    <i class="fas fa-tasks fa-3x text-white-50"></i>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
-        <div class="card text-white bg-warning mb-3">
+        <div class="card bg-warning text-white h-100">
             <div class="card-body">
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h4>{{ pending_count }}</h4>
-                        <p>待处理回复</p>
+                        <h6 class="text-white-50">待回复邮件</h6>
+                        <h2 class="mb-0 fw-bold">{{ pending_count }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-envelope fa-2x"></i>
-                    </div>
+                    <i class="fas fa-envelope-open-text fa-3x text-white-50"></i>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
-        <div class="card text-white bg-info mb-3">
+        <div class="card bg-info text-white h-100">
             <div class="card-body">
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h4>{{ completed_count }}</h4>
-                        <p>已完成任务</p>
+                        <h6 class="text-white-50">已完成收集</h6>
+                        <h2 class="mb-0 fw-bold">{{ completed_count }}</h2>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-check-circle fa-2x"></i>
-                    </div>
+                    <i class="fas fa-clipboard-check fa-3x text-white-50"></i>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5>快速操作</h5>
+<!-- 快捷入口与图表 -->
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-chart-pie me-2 text-primary"></i>数据收集概况</h5>
             </div>
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('manage_teachers') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-user-plus me-2"></i>添加教师
-                    </a>
-                    <a href="{{ url_for('manage_tasks') }}" class="btn btn-outline-success">
-                        <i class="fas fa-plus-circle me-2"></i>创建汇总任务
-                    </a>
-                    <a href="{{ url_for('ai_assistant') }}" class="btn btn-outline-info">
-                        <i class="fas fa-robot me-2"></i>AI数据查询
-                    </a>
-                </div>
+                <canvas id="overviewChart" height="120"></canvas>
             </div>
         </div>
     </div>
     
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5>系统功能</h5>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-warning"></i>快捷操作</h5>
             </div>
-            <div class="card-body">
-                <ul class="list-group list-group-flush">
-                    <li class="list-group-item">
-                        <i class="fas fa-mail-bulk text-primary me-2"></i>
-                        批量邮件发送
-                    </li>
-                    <li class="list-group-item">
-                        <i class="fas fa-bell text-warning me-2"></i>
-                        自动提醒未回复
-                    </li>
-                    <li class="list-group-item">
-                        <i class="fas fa-file-excel text-success me-2"></i>
-                        Excel附件自动合并
-                    </li>
-                    <li class="list-group-item">
-                        <i class="fas fa-brain text-info me-2"></i>
-                        AI自然语言查询
-                    </li>
-                </ul>
+            <div class="card-body d-grid gap-3">
+                <a href="{{ url_for('manage_tasks') }}" class="btn btn-outline-primary btn-lg text-start">
+                    <i class="fas fa-plus-circle me-2"></i>发起新汇总任务
+                </a>
+                <a href="{{ url_for('manage_teachers') }}" class="btn btn-outline-success btn-lg text-start">
+                    <i class="fas fa-user-plus me-2"></i>录入新教师
+                </a>
+                <a href="{{ url_for('ai_assistant') }}" class="btn btn-outline-dark btn-lg text-start">
+                    <i class="fas fa-search me-2"></i>智能查询数据
+                </a>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 初始化图表
+const ctx = document.getElementById('overviewChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: ['已回复', '待回复'],
+        datasets: [{
+            label: '邮件状态',
+            data: [{{ completed_count }}, {{ pending_count }}],
+            backgroundColor: [
+                'rgba(54, 162, 235, 0.7)',
+                'rgba(255, 206, 86, 0.7)'
+            ],
+            borderColor: [
+                'rgba(54, 162, 235, 1)',
+                'rgba(255, 206, 86, 1)'
+            ],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        indexAxis: 'y', // 横向柱状图
+        responsive: true,
+        plugins: {
+            legend: { display: false }
+        }
+    }
+});
+</script>
 {% endblock %}

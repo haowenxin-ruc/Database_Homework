@@ -1,3 +1,4 @@
+# [file name]: models.py
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
@@ -46,15 +47,34 @@ class SummaryTask(db.Model):
     # 存储模板字段结构的JSON
     template_fields = db.Column(db.Text)
     
+    # 【新增】存储动态表的列名映射 JSON (Excel列名 -> 数据库安全列名)
+    column_mapping = db.Column(db.Text)
+    
     def get_template_fields(self):
         """获取模板字段结构"""
         if self.template_fields:
-            return json.loads(self.template_fields)
+            try:
+                return json.loads(self.template_fields)
+            except:
+                return []
         return []
     
     def set_template_fields(self, fields):
         """设置模板字段结构"""
         self.template_fields = json.dumps(fields, ensure_ascii=False)
+
+    # 【新增】获取列映射的方法
+    def get_column_mapping(self):
+        if self.column_mapping:
+            try:
+                return json.loads(self.column_mapping)
+            except:
+                return {}
+        return {}
+
+    # 【新增】设置列映射的方法
+    def set_column_mapping(self, mapping):
+        self.column_mapping = json.dumps(mapping, ensure_ascii=False)
 
 class EmailRecord(db.Model):
     """邮件记录表"""
@@ -66,7 +86,9 @@ class EmailRecord(db.Model):
     sent_time = db.Column(db.DateTime, default=datetime.utcnow)
     replied_time = db.Column(db.DateTime)
     reply_title = db.Column(db.String(100))
-    status = db.Column(db.String(20), default='未回复')
+    
+    # 状态: '未发送', '未回复', '已回复'
+    status = db.Column(db.String(20), default='未发送')
     
     # 冗余字段，优化查询性能
     teacher_name = db.Column(db.String(50))
@@ -77,7 +99,7 @@ class EmailRecord(db.Model):
     teacher = db.relationship('Teacher', backref=db.backref('email_records', lazy=True))
 
 class TaskResponse(db.Model):
-    """任务回复数据表"""
+    """任务回复数据表 (保留EAV模式以兼容旧逻辑)"""
     __tablename__ = 'task_responses'
     
     response_id = db.Column(db.Integer, primary_key=True)

@@ -1,462 +1,229 @@
-<!-- [file name]: advanced_analysis.html (完整的修复版本) -->
-<!-- [file content begin] -->
+<!-- [file name]: templates/advanced_analysis.html -->
 {% extends "base.html" %}
 
 {% block title %}高级分析 - {{ task.task_name }}{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>高级分析 - {{ task.task_name }}</h2>
     <div>
-        <a href="{{ url_for('task_summary', task_id=task.task_id) }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>返回汇总页面
-        </a>
+        <h2 class="fw-bold">高级数据分析</h2>
+        <p class="text-muted">任务：{{ task.task_name }}</p>
     </div>
+    <a href="{{ url_for('task_summary', task_id=task.task_id) }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left me-2"></i>返回汇总表
+    </a>
 </div>
 
-<!-- 分析概览 -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">分析概览</h5>
+<!-- 加载状态提示 -->
+<div id="loadingMessage" class="alert alert-info text-center">
+    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+    正在进行AI数据分析，请稍候...
+</div>
+
+<!-- 错误提示容器 -->
+<div id="errorMessage" class="alert alert-danger text-center" style="display: none;"></div>
+
+<!-- 概览卡片 -->
+<div class="row g-3 mb-4" id="statsCards" style="display: none;">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body text-center">
+                <h3 class="fw-bold" id="stat-rate">0%</h3>
+                <p class="mb-0">总体回复率</p>
             </div>
-            <div class="card-body">
-                <div class="row" id="analysisOverview">
-                    <div class="col-12 text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">加载中...</span>
-                        </div>
-                        <p class="mt-2 text-muted">正在加载分析数据...</p>
-                    </div>
-                </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body text-center">
+                <h3 class="fw-bold" id="stat-replied">0</h3>
+                <p class="mb-0">已回复人数</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white h-100">
+            <div class="card-body text-center">
+                <h3 class="fw-bold" id="stat-total">0</h3>
+                <p class="mb-0">总人数</p>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 图表区域 -->
-<div class="row">
-    <!-- 回复趋势 -->
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">回复趋势分析</h5>
-            </div>
+<div class="row" id="chartsArea" style="visibility: hidden;">
+    <!-- 1. 回复趋势图 -->
+    <div class="col-md-12 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-bold">📅 回复趋势 (随时间变化)</div>
             <div class="card-body">
-                <div class="chart-container">
+                <div style="height: 300px;">
                     <canvas id="trendChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 部门回复情况 -->
+    <!-- 2. 部门统计图 -->
     <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">部门回复情况</h5>
-            </div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">🏢 各部门回复率</div>
             <div class="card-body">
-                <div class="chart-container">
+                <div style="height: 300px;">
                     <canvas id="departmentChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 字段填写情况 -->
+    <!-- 3. 字段填写率 -->
     <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">字段填写情况</h5>
-            </div>
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-white fw-bold">📝 字段填写完整度</div>
             <div class="card-body">
-                <div class="chart-container">
+                <div style="height: 300px;">
                     <canvas id="fieldChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- 回复时间分布 -->
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">回复时间分布</h5>
-            </div>
+    
+    <!-- 4. 回复时间分布 -->
+    <div class="col-md-12 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white fw-bold">⏱️ 回复耗时分布 (小时)</div>
             <div class="card-body">
-                <div class="chart-container">
+                <div style="height: 300px;">
                     <canvas id="timeChart"></canvas>
                 </div>
-                <div id="timeStats" class="mt-3"></div>
+                <div id="timeStatsText" class="mt-3 text-center text-muted small"></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 详细数据表格 -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">详细分析数据</h5>
-            </div>
-            <div class="card-body">
-                <ul class="nav nav-tabs" id="analysisTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="department-tab" data-bs-toggle="tab" data-bs-target="#department" type="button" role="tab">部门统计</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="field-tab" data-bs-toggle="tab" data-bs-target="#field" type="button" role="tab">字段统计</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="time-tab" data-bs-toggle="tab" data-bs-target="#time" type="button" role="tab">时间分析</button>
-                    </li>
-                </ul>
-                <div class="tab-content p-3" id="analysisTabsContent">
-                    <div class="tab-pane fade show active" id="department" role="tabpanel">
-                        <div id="departmentTable">
-                            <div class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">加载中...</span>
-                                </div>
-                                <p class="mt-2 text-muted">加载部门数据...</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade" id="field" role="tabpanel">
-                        <div id="fieldTable">
-                            <div class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">加载中...</span>
-                                </div>
-                                <p class="mt-2 text-muted">加载字段数据...</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tab-pane fade" id="time" role="tabpanel">
-                        <div id="timeTable">
-                            <div class="text-center py-4">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">加载中...</span>
-                                </div>
-                                <p class="mt-2 text-muted">加载时间数据...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 图表实例
-let trendChart = null;
-let departmentChart = null;
-let fieldChart = null;
-let timeChart = null;
+// 全局图表实例
+let charts = {};
 
-// 页面加载完成后获取分析数据
 $(document).ready(function() {
-    loadComprehensiveAnalysis();
+    loadAnalysisData();
 });
 
-function loadComprehensiveAnalysis() {
+function loadAnalysisData() {
+    console.log("开始请求分析数据...");
+    
     $.ajax({
         url: '/api/tasks/{{ task.task_id }}/analysis/comprehensive',
         method: 'GET',
         success: function(response) {
-            if (response.success) {
-                console.log("分析数据加载成功:", response.analysis);
-                renderAnalysisOverview(response.analysis);
-                renderTrendChart(response.analysis.trend_analysis);
-                renderDepartmentChart(response.analysis.department_analysis);
-                renderFieldChart(response.analysis.field_analysis);
-                renderTimeAnalysis(response.analysis.time_analysis);
-                renderDetailedTables(response.analysis);
+            console.log("收到数据:", response);
+            $('#loadingMessage').hide();
+            
+            if (response.success && response.analysis) {
+                $('#statsCards').fadeIn();
+                $('#chartsArea').css('visibility', 'visible').hide().fadeIn();
+                
+                const data = response.analysis;
+                
+                // 1. 渲染概览卡片
+                if (data.basic_stats) {
+                    $('#stat-rate').text(data.basic_stats.reply_rate + '%');
+                    $('#stat-replied').text(data.basic_stats.replied_teachers);
+                    $('#stat-total').text(data.basic_stats.total_teachers);
+                }
+
+                // 2. 渲染各个图表
+                renderTrendChart(data.trend_analysis);
+                renderDepartmentChart(data.department_analysis);
+                renderFieldChart(data.field_analysis);
+                renderTimeChart(data.time_analysis);
+                
             } else {
-                showError('加载分析数据失败: ' + response.error);
+                showError('获取的数据为空或格式错误');
             }
         },
         error: function(xhr, status, error) {
-            showError('请求分析数据失败: ' + error);
+            console.error("请求失败:", error);
+            $('#loadingMessage').hide();
+            showError('数据请求失败: ' + error);
         }
     });
 }
 
-function renderAnalysisOverview(analysis) {
-    const basicStats = analysis.basic_stats;
-    
-    const html = `
-        <div class="col-md-3">
-            <div class="card stat-card bg-primary text-white">
-                <div class="card-body text-center">
-                    <h3>${basicStats.reply_rate}%</h3>
-                    <p>总体回复率</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card stat-card bg-success text-white">
-                <div class="card-body text-center">
-                    <h3>${basicStats.replied_teachers}</h3>
-                    <p>已回复教师</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card stat-card bg-warning text-white">
-                <div class="card-body text-center">
-                    <h3>${basicStats.not_replied_teachers}</h3>
-                    <p>未回复教师</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card stat-card bg-info text-white">
-                <div class="card-body text-center">
-                    <h3>${basicStats.total_teachers}</h3>
-                    <p>总教师数</p>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    $('#analysisOverview').html(html);
+function showError(msg) {
+    $('#errorMessage').text(msg).show();
 }
 
-function renderTrendChart(trendData) {
-    const container = $('#trendChart').parent();
-    
-    if (!trendData || !trendData.dates || trendData.dates.length === 0) {
-        container.html('<p class="text-muted text-center py-4">暂无趋势数据</p>');
+// 销毁旧图表防止重叠
+function destroyChart(id) {
+    if (charts[id]) {
+        charts[id].destroy();
+    }
+}
+
+// --- 图表渲染函数 ---
+
+// 1. 趋势图 (Line)
+function renderTrendChart(data) {
+    if (!data || !data.dates || data.dates.length === 0) {
+        console.warn("趋势图数据为空");
         return;
     }
     
     const ctx = document.getElementById('trendChart').getContext('2d');
+    destroyChart('trend');
     
-    if (trendChart) {
-        trendChart.destroy();
-    }
-    
-    trendChart = new Chart(ctx, {
+    charts['trend'] = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: trendData.dates,
-            datasets: [
-                {
-                    label: '总发送数',
-                    data: trendData.total,
-                    borderColor: 'rgb(54, 162, 235)',
-                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: '已回复数',
-                    data: trendData.replied,
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: '回复率',
-                    data: trendData.reply_rate,
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
-                    tension: 0.1,
-                    fill: true,
-                    yAxisID: 'y1'
-                }
-            ]
+            labels: data.dates,
+            datasets: [{
+                label: '累计回复数',
+                data: data.replied,
+                borderColor: '#0d6efd',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
             scales: {
-                x: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    display: true,
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: '人数'
-                    }
-                },
-                y1: {
-                    display: true,
-                    beginAtZero: true,
-                    position: 'right',
-                    title: {
-                        display: true,
-                        text: '回复率 (%)'
-                    },
-                    max: 100,
-                    grid: {
-                        drawOnChartArea: false
-                    }
-                }
+                y: { beginAtZero: true, ticks: { precision: 0 } }
             }
         }
     });
 }
 
-function renderDepartmentChart(departmentData) {
-    const container = $('#departmentChart').parent();
+// 2. 部门图 (Bar)
+function renderDepartmentChart(data) {
+    if (!data || Object.keys(data).length === 0) return;
     
-    if (!departmentData || Object.keys(departmentData).length === 0) {
-        container.html('<p class="text-muted text-center py-4">暂无部门数据</p>');
-        return;
-    }
+    const labels = Object.keys(data);
+    const values = labels.map(k => data[k].reply_rate); // 使用回复率
     
     const ctx = document.getElementById('departmentChart').getContext('2d');
-    const departments = Object.keys(departmentData);
-    const replyRates = departments.map(dept => departmentData[dept].reply_rate);
+    destroyChart('dept');
     
-    if (departmentChart) {
-        departmentChart.destroy();
-    }
-    
-    departmentChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: departments,
-            datasets: [{
-                label: '回复率 (%)',
-                data: replyRates,
-                backgroundColor: departments.map((_, index) => 
-                    `hsl(${index * 360 / departments.length}, 70%, 60%)`
-                ),
-                borderColor: departments.map((_, index) => 
-                    `hsl(${index * 360 / departments.length}, 70%, 40%)`
-                ),
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: '回复率 (%)'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: '部门'
-                    }
-                }
-            }
-        }
-    });
-}
-
-function renderFieldChart(fieldData) {
-    const container = $('#fieldChart').parent();
-    
-    if (!fieldData || Object.keys(fieldData).length === 0) {
-        container.html('<p class="text-muted text-center py-4">暂无字段数据</p>');
-        return;
-    }
-    
-    const ctx = document.getElementById('fieldChart').getContext('2d');
-    const fields = Object.keys(fieldData);
-    const fillRates = fields.map(field => fieldData[field].fill_rate);
-    
-    if (fieldChart) {
-        fieldChart.destroy();
-    }
-    
-    fieldChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: fields,
-            datasets: [{
-                label: '填写率 (%)',
-                data: fillRates,
-                backgroundColor: fields.map((_, index) => 
-                    `hsl(${index * 360 / fields.length}, 70%, 60%)`
-                ),
-                borderColor: fields.map((_, index) => 
-                    `hsl(${index * 360 / fields.length}, 70%, 40%)`
-                ),
-                borderWidth: 1
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: '填写率 (%)'
-                    }
-                }
-            }
-        }
-    });
-}
-
-function renderTimeAnalysis(timeData) {
-    const container = $('#timeChart').parent();
-    
-    if (!timeData) {
-        container.html('<p class="text-muted text-center py-4">暂无回复时间数据</p>');
-        return;
-    }
-    
-    // 检查直方图数据是否有效
-    if (!timeData.histogram || !timeData.histogram.bins || timeData.histogram.bins.length <= 1) {
-        container.html('<p class="text-muted text-center py-4">时间数据不完整，无法生成图表</p>');
-        return;
-    }
-    
-    // 渲染直方图
-    const ctx = document.getElementById('timeChart').getContext('2d');
-    
-    if (timeChart) {
-        timeChart.destroy();
-    }
-    
-    // 生成直方图标签
-    const labels = [];
-    for (let i = 0; i < timeData.histogram.bins.length - 1; i++) {
-        labels.push(`${timeData.histogram.bins[i].toFixed(1)}-${timeData.histogram.bins[i+1].toFixed(1)}h`);
-    }
-    
-    timeChart = new Chart(ctx, {
+    charts['dept'] = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
-                label: '回复数量',
-                data: timeData.histogram.counts,
-                backgroundColor: 'rgba(153, 102, 255, 0.6)',
-                borderColor: 'rgba(153, 102, 255, 1)',
+                label: '部门回复率 (%)',
+                data: values,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.6)',
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(75, 192, 192, 0.6)'
+                ],
                 borderWidth: 1
             }]
         },
@@ -464,244 +231,87 @@ function renderTimeAnalysis(timeData) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: '回复数量'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: '回复时间区间 (小时)'
-                    }
-                }
+                y: { beginAtZero: true, max: 100 }
             }
         }
     });
-    
-    // 渲染统计信息
-    const statsHtml = `
-        <div class="row text-center">
-            <div class="col-md-3 mb-3">
-                <div class="card bg-light">
-                    <div class="card-body">
-                        <strong>平均回复时间</strong><br>
-                        <span class="h5 text-primary">${timeData.mean} 小时</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card bg-light">
-                    <div class="card-body">
-                        <strong>中位数</strong><br>
-                        <span class="h5 text-primary">${timeData.median} 小时</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card bg-light">
-                    <div class="card-body">
-                        <strong>最快回复</strong><br>
-                        <span class="h5 text-success">${timeData.min} 小时</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card bg-light">
-                    <div class="card-body">
-                        <strong>最慢回复</strong><br>
-                        <span class="h5 text-warning">${timeData.max} 小时</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="row text-center">
-            <div class="col-md-4">
-                <small class="text-muted">标准差: ${timeData.std} 小时</small>
-            </div>
-            <div class="col-md-4">
-                <small class="text-muted">25% 分位数: ${timeData.percentile_25} 小时</small>
-            </div>
-            <div class="col-md-4">
-                <small class="text-muted">75% 分位数: ${timeData.percentile_75} 小时</small>
-            </div>
-        </div>
-    `;
-    
-    $('#timeStats').html(statsHtml);
 }
 
-function renderDetailedTables(analysis) {
-    // 部门表格
-    const departmentTable = $('#departmentTable');
-    if (analysis.department_analysis && Object.keys(analysis.department_analysis).length > 0) {
-        let departmentHtml = '<div class="table-responsive"><table class="table table-striped table-hover"><thead><tr><th>部门</th><th>总人数</th><th>已回复</th><th>未回复</th><th>回复率</th></tr></thead><tbody>';
-        
-        Object.entries(analysis.department_analysis).forEach(([dept, stats]) => {
-            const progressClass = stats.reply_rate > 80 ? 'bg-success' : stats.reply_rate > 50 ? 'bg-warning' : 'bg-danger';
-            departmentHtml += `
-                <tr>
-                    <td><strong>${dept}</strong></td>
-                    <td>${stats.total}</td>
-                    <td><span class="text-success">${stats.replied}</span></td>
-                    <td><span class="text-danger">${stats.not_replied}</span></td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height: 20px;">
-                                <div class="progress-bar ${progressClass}" style="width: ${stats.reply_rate}%"></div>
-                            </div>
-                            <span>${stats.reply_rate}%</span>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        departmentHtml += '</tbody></table></div>';
-        departmentTable.html(departmentHtml);
-    } else {
-        departmentTable.html('<div class="alert alert-info text-center">暂无部门数据</div>');
-    }
+// 3. 字段图 (Horizontal Bar)
+function renderFieldChart(data) {
+    if (!data || Object.keys(data).length === 0) return;
     
-    // 字段表格
-    const fieldTable = $('#fieldTable');
-    if (analysis.field_analysis && Object.keys(analysis.field_analysis).length > 0) {
-        let fieldHtml = '<div class="table-responsive"><table class="table table-striped table-hover"><thead><tr><th>字段名</th><th>必填</th><th>总填写数</th><th>已填写</th><th>未填写</th><th>填写率</th></tr></thead><tbody>';
-        
-        Object.entries(analysis.field_analysis).forEach(([field, stats]) => {
-            const progressClass = stats.fill_rate > 80 ? 'bg-success' : stats.fill_rate > 50 ? 'bg-warning' : 'bg-danger';
-            const requiredBadge = stats.required ? '<span class="badge bg-danger">是</span>' : '<span class="badge bg-success">否</span>';
-            
-            fieldHtml += `
-                <tr>
-                    <td><strong>${field}</strong></td>
-                    <td>${requiredBadge}</td>
-                    <td>${stats.total}</td>
-                    <td><span class="text-success">${stats.filled}</span></td>
-                    <td><span class="text-danger">${stats.empty}</span></td>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <div class="progress flex-grow-1 me-2" style="height: 20px;">
-                                <div class="progress-bar ${progressClass}" style="width: ${stats.fill_rate}%"></div>
-                            </div>
-                            <span>${stats.fill_rate}%</span>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        fieldHtml += '</tbody></table></div>';
-        fieldTable.html(fieldHtml);
-    } else {
-        fieldTable.html('<div class="alert alert-info text-center">暂无字段数据</div>');
-    }
+    const labels = Object.keys(data);
+    const values = labels.map(k => data[k].fill_rate);
     
-    // 时间分析表格
-    const timeTable = $('#timeTable');
-    if (analysis.time_analysis) {
-        const time = analysis.time_analysis;
-        const timeHtml = `
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                    <thead>
-                        <tr><th>统计指标</th><th>数值</th><th>说明</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>样本数量</strong></td>
-                            <td>${time.count} 个回复</td>
-                            <td>有效回复时间样本总数</td>
-                        </tr>
-                        <tr>
-                            <td><strong>平均回复时间</strong></td>
-                            <td>${time.mean} 小时</td>
-                            <td>所有回复时间的算术平均值</td>
-                        </tr>
-                        <tr>
-                            <td><strong>中位数回复时间</strong></td>
-                            <td>${time.median} 小时</td>
-                            <td>50%的教师在此时间内回复</td>
-                        </tr>
-                        <tr>
-                            <td><strong>最短回复时间</strong></td>
-                            <td>${time.min} 小时</td>
-                            <td>最快的回复时间</td>
-                        </tr>
-                        <tr>
-                            <td><strong>最长回复时间</strong></td>
-                            <td>${time.max} 小时</td>
-                            <td>最慢的回复时间</td>
-                        </tr>
-                        <tr>
-                            <td><strong>标准差</strong></td>
-                            <td>${time.std} 小时</td>
-                            <td>回复时间的离散程度</td>
-                        </tr>
-                        <tr>
-                            <td><strong>25% 分位数</strong></td>
-                            <td>${time.percentile_25} 小时</td>
-                            <td>25%的教师在此时间内回复</td>
-                        </tr>
-                        <tr>
-                            <td><strong>75% 分位数</strong></td>
-                            <td>${time.percentile_75} 小时</td>
-                            <td>75%的教师在此时间内回复</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        timeTable.html(timeHtml);
-    } else {
-        timeTable.html('<div class="alert alert-info text-center">暂无时间分析数据</div>');
-    }
+    const ctx = document.getElementById('fieldChart').getContext('2d');
+    destroyChart('field');
+    
+    charts['field'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '字段填写率 (%)',
+                data: values,
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y', // 横向
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { beginAtZero: true, max: 100 }
+            }
+        }
+    });
 }
 
-function showError(message) {
-    console.error("分析错误:", message);
+// 4. 时间分布图 (Bar/Histogram)
+function renderTimeChart(data) {
+    if (!data || !data.histogram || data.histogram.counts.length === 0) {
+        $('#timeChart').parent().html('<div class="text-center pt-5 text-muted">暂无足够的时间数据</div>');
+        return;
+    }
     
-    const errorHtml = `
-        <div class="alert alert-danger">
-            <h5><i class="fas fa-exclamation-triangle me-2"></i>加载失败</h5>
-            <p class="mb-0">${message}</p>
-        </div>
-    `;
+    // 构建区间标签 (e.g., "0-2h", "2-4h")
+    const bins = data.histogram.bins;
+    const labels = [];
+    for(let i=0; i<bins.length-1; i++) {
+        labels.push(`${Math.round(bins[i])}-${Math.round(bins[i+1])}h`);
+    }
     
-    // 更新概览区域
-    $('#analysisOverview').html(`<div class="col-12">${errorHtml}</div>`);
+    const ctx = document.getElementById('timeChart').getContext('2d');
+    destroyChart('time');
     
-    // 更新所有图表区域
-    $('.chart-container').each(function() {
-        $(this).html(errorHtml);
+    charts['time'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '回复人数分布',
+                data: data.histogram.counts,
+                backgroundColor: 'rgba(153, 102, 255, 0.6)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
     });
     
-    // 更新表格区域
-    $('#departmentTable, #fieldTable, #timeTable').html(errorHtml);
+    // 显示统计文字
+    if(data.mean) {
+        $('#timeStatsText').html(`
+            <span class="badge bg-light text-dark border">平均耗时: ${data.mean}小时</span>
+            <span class="badge bg-light text-dark border ms-2">最快: ${data.min}小时</span>
+            <span class="badge bg-light text-dark border ms-2">最慢: ${data.max}小时</span>
+        `);
+    }
 }
 </script>
-
-<style>
-.chart-container {
-    position: relative;
-    height: 300px;
-    width: 100%;
-}
-
-.stat-card {
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-
-.stat-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-.table-hover tbody tr:hover {
-    background-color: rgba(0,0,0,0.075);
-}
-</style>
 {% endblock %}
-<!-- [file content end] -->

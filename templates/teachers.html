@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}教师管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>教师信息管理</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTeacherModal">
+        <i class="fas fa-plus me-2"></i>添加教师
+    </button>
+</div>
+
+<!-- 教师列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">教师列表</h5>
+    </div>
+    <div class="card-body">
+        {% if teachers %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>姓名</th>
+                        <th>所在系</th>
+                        <th>邮箱</th>
+                        <th>手机</th>
+                        <th>职称</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for teacher in teachers %}
+                    <tr>
+                        <td>{{ teacher.teacher_name }}</td>
+                        <td>{{ teacher.department }}</td>
+                        <td>{{ teacher.email }}</td>
+                        <td>{{ teacher.phone or '未填写' }}</td>
+                        <td>{{ teacher.title or '未填写' }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    onclick="editTeacher({{ teacher.teacher_id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" 
+                                    onclick="deleteTeacher({{ teacher.teacher_id }})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+            <p class="text-muted">暂无教师信息</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 添加教师模态框 -->
+<div class="modal fade" id="addTeacherModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加教师</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addTeacherForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">姓名 *</label>
+                        <input type="text" class="form-control" name="teacher_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">所在系 *</label>
+                        <input type="text" class="form-control" name="department" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">邮箱 *</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">手机</label>
+                                <input type="text" class="form-control" name="phone">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">职称</label>
+                                <input type="text" class="form-control" name="title">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 添加教师表单提交
+$('#addTeacherForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    $.ajax({
+        url: '/api/teachers',
+        method: 'POST',
+        data: $(this).serialize(),
+        success: function(response) {
+            if (response.success) {
+                $('#addTeacherModal').modal('hide');
+                location.reload();
+            } else {
+                alert('添加失败: ' + response.error);
+            }
+        }
+    });
+});
+
+function editTeacher(teacherId) {
+    alert('编辑功能开发中...教师ID: ' + teacherId);
+}
+
+function deleteTeacher(teacherId) {
+    if (confirm('确定要删除这位教师吗？')) {
+        $.ajax({
+            url: '/api/teachers/' + teacherId,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert('删除失败: ' + response.error);
+                }
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

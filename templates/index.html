@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}首页{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">数据汇总工具</h1>
+        <p class="lead">为学院科研秘书提供高效的数据收集和汇总解决方案</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ teacher_count }}</h4>
+                        <p>教师数量</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ task_count }}</h4>
+                        <p>汇总任务</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-tasks fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-warning mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ pending_count }}</h4>
+                        <p>待处理回复</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-envelope fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-info mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ completed_count }}</h4>
+                        <p>已完成任务</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>快速操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('manage_teachers') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-user-plus me-2"></i>添加教师
+                    </a>
+                    <a href="{{ url_for('manage_tasks') }}" class="btn btn-outline-success">
+                        <i class="fas fa-plus-circle me-2"></i>创建汇总任务
+                    </a>
+                    <a href="{{ url_for('ai_assistant') }}" class="btn btn-outline-info">
+                        <i class="fas fa-robot me-2"></i>AI数据查询
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>系统功能</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="fas fa-mail-bulk text-primary me-2"></i>
+                        批量邮件发送
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-bell text-warning me-2"></i>
+                        自动提醒未回复
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-file-excel text-success me-2"></i>
+                        Excel附件自动合并
+                    </li>
+                    <li class="list-group-item">
+                        <i class="fas fa-brain text-info me-2"></i>
+                        AI自然语言查询
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

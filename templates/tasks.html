@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}任务管理{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>汇总任务管理</h2>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+        <i class="fas fa-plus me-2"></i>创建任务
+    </button>
+</div>
+
+<!-- 任务列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">任务列表</h5>
+    </div>
+    <div class="card-body">
+        {% if tasks %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>任务名称</th>
+                        <th>描述</th>
+                        <th>创建时间</th>
+                        <th>截止时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                    <tr>
+                        <td>{{ task.task_name }}</td>
+                        <td>{{ task.description or '无描述' }}</td>
+                        <td>{{ task.create_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else '未设置' }}</td>
+                        <td>
+                            {% if task.template_fields %}
+                            {% set fields = task.get_template_fields() %}
+                            <span class="badge bg-info" 
+                                  data-bs-toggle="tooltip" 
+                                  title="{% for field in fields %}{{ field.name }}{% if not loop.last %}, {% endif %}{% endfor %}">
+                                {{ fields|length }} 个字段
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary">无模板</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" 
+                                onclick="viewTemplateFields({{ task.task_id }})">
+                            <i class="fas fa-eye"></i> 查看字段
+                        </button>                  
+                            <button class="btn btn-sm btn-outline-primary" 
+                                    onclick="editTask({{ task.task_id }})">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" 
+                                    onclick="deleteTask({{ task.task_id }})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" 
+                                    onclick="sendTaskEmails({{ task.task_id }})">
+                                <i class="fas fa-envelope"></i> 发送邮件
+                            </button>
+                                
+    <!-- 新增查看回复按钮 -->
+                            <a href="{{ url_for('task_replies', task_id=task.task_id) }}" 
+                            class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-eye"></i> 查看回复
+                        </a>
+                            <a href="{{ url_for('task_summary', task_id=task.task_id) }}" 
+                            class="btn btn-sm btn-outline-warning">
+                             <i class="fas fa-chart-bar"></i> 数据汇总
+                        </a>
+                        <a href="{{ url_for('advanced_analysis_page', task_id=task.task_id) }}" 
+                      class="btn btn-sm btn-outline-dark">
+                     <i class="fas fa-chart-line"></i> 高级分析
+                        </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-tasks fa-3x text-muted mb-3"></i>
+            <p class="text-muted">暂无汇总任务</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 添加任务模态框 -->
+<div class="modal fade" id="addTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">创建汇总任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addTaskForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">任务名称 *</label>
+                        <input type="text" class="form-control" name="task_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">任务描述</label>
+                        <textarea class="form-control" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">截止时间</label>
+                        <input type="datetime-local" class="form-control" name="deadline">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Excel模板</label>
+                        <input type="file" class="form-control" name="template_file" accept=".xlsx,.xls">
+                        <div class="form-text">上传Excel模板文件，定义需要收集的字段</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">创建任务</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 添加查看字段的模态框 -->
+<div class="modal fade" id="viewFieldsModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">模板字段详情</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="fieldsList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 添加任务表单提交
+$('#addTaskForm').on('submit', function(e) {
+    e.preventDefault();
+    
+    var formData = new FormData(this);
+    
+    $.ajax({
+        url: '/api/tasks',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(response) {
+            if (response.success) {
+                $('#addTaskModal').modal('hide');
+                location.reload();
+            } else {
+                alert('创建失败: ' + response.error);
+            }
+        }
+    });
+});
+
+function editTask(taskId) {
+    alert('编辑功能开发中...任务ID: ' + taskId);
+}
+
+function deleteTask(taskId) {
+    if (confirm('确定要删除这个任务吗？')) {
+        $.ajax({
+            url: '/api/tasks/' + taskId,
+            method: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert('删除失败: ' + response.error);
+                }
+            }
+        });
+    }
+}
+
+function sendTaskEmails(taskId) {
+    if (confirm('确定要发送任务邮件吗？')) {
+        $.ajax({
+            url: '/api/tasks/' + taskId + '/send-emails',
+            method: 'POST',
+            success: function(response) {
+                if (response.success) {
+                    alert('邮件发送任务已启动！');
+                } else {
+                    alert('发送失败: ' + response.error);
+                }
+            }
+        });
+    }
+}
+function viewTemplateFields(taskId) {
+    $.ajax({
+        url: '/api/tasks/' + taskId + '/fields',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                let html = `<h6>任务: ${response.task_name}</h6>`;
+                html += `<table class="table table-sm">`;
+                html += `<thead><tr><th>字段名</th><th>类型</th><th>必填</th></tr></thead>`;
+                html += `<tbody>`;
+                
+                response.fields.forEach(field => {
+                    html += `<tr>
+                        <td>${field.name}</td>
+                        <td><span class="badge bg-secondary">${field.type || 'string'}</span></td>
+                        <td>${field.required ? '<span class="badge bg-danger">是</span>' : '<span class="badge bg-success">否</span>'}</td>
+                    </tr>`;
+                });
+                
+                html += `</tbody></table>`;
+                $('#fieldsList').html(html);
+                $('#viewFieldsModal').modal('show');
+            } else {
+                alert('获取字段失败: ' + response.error);
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

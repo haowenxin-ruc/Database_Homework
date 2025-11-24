@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}回复状态 - {{ task.task_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>回复状态 - {{ task.task_name }}</h2>
+    <div>
+        <button class="btn btn-primary" onclick="checkReplies()">
+            <i class="fas fa-sync-alt me-2"></i>检查新回复
+        </button>
+        <a href="{{ url_for('manage_tasks') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>返回任务列表
+        </a>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ statistics.total }}</h4>
+                        <p>总发送数</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-paper-plane fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ statistics.replied }}</h4>
+                        <p>已回复</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ statistics.not_replied }}</h4>
+                        <p>未回复</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ statistics.reply_rate }}%</h4>
+                        <p>回复率</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">已回复教师 ({{ replied_teachers|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if replied_teachers %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>部门</th>
+                                <th>回复时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for teacher in replied_teachers %}
+                            <tr>
+                                <td>{{ teacher.teacher_name }}</td>
+                                <td>{{ teacher.department }}</td>
+                                <td>{{ teacher.reply_time }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无回复</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">未回复教师 ({{ not_replied_teachers|length }})</h5>
+            </div>
+            <div class="card-body">
+                {% if not_replied_teachers %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>部门</th>
+                                <th>邮箱</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for teacher in not_replied_teachers %}
+                            <tr>
+                                <td>{{ teacher.teacher_name }}</td>
+                                <td>{{ teacher.department }}</td>
+                                <td>{{ teacher.email }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">所有教师均已回复</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 检查结果模态框 -->
+<div class="modal fade" id="checkResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">检查结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="checkResultContent">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function checkReplies() {
+    $.ajax({
+        url: '/api/tasks/{{ task.task_id }}/check-replies',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                let html = `<div class="alert alert-success">
+                    <h6>${response.message}</h6>
+                    <p>总共找到 ${response.total_emails} 封相关邮件</p>`;
+                
+                if (response.new_replies && response.new_replies.length > 0) {
+                    html += `<hr><h6>新回复教师:</h6><ul>`;
+                    response.new_replies.forEach(reply => {
+                        html += `<li>${reply.teacher_name} (${reply.reply_time})</li>`;
+                    });
+                    html += `</ul>`;
+                }
+                
+                html += `</div>`;
+                
+                $('#checkResultContent').html(html);
+                $('#checkResultModal').modal('show');
+                
+                // 3秒后刷新页面
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            } else {
+                $('#checkResultContent').html(`<div class="alert alert-danger">检查失败: ${response.error}</div>`);
+                $('#checkResultModal').modal('show');
+            }
+        }
+    });
+}
+</script>
+{% endblock %}

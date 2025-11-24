@@ -1,0 +1,262 @@
+<!-- [file name]: task_summary.html -->
+<!-- [file content begin] -->
+{% extends "base.html" %}
+
+{% block title %}数据汇总 - {{ task.task_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>数据汇总 - {{ task.task_name }}</h2>
+    <div>
+        <button class="btn btn-success" onclick="generateSummary()">
+            <i class="fas fa-file-excel me-2"></i>生成汇总表
+        </button>
+        <a href="{{ url_for('task_replies', task_id=task.task_id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>返回回复状态
+        </a>
+    </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ stats.total_teachers }}</h4>
+                        <p>总教师数</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ stats.replied_teachers }}</h4>
+                        <p>已回复</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ stats.not_replied_teachers }}</h4>
+                        <p>未回复</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ stats.reply_rate }}%</h4>
+                        <p>回复率</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">数据预览</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshPreview()">
+                    <i class="fas fa-sync-alt me-1"></i>刷新
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="dataPreview">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                        <p class="mt-2 text-muted">正在加载数据预览...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">字段统计</h5>
+            </div>
+            <div class="card-body">
+                {% if stats.field_stats %}
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>字段名</th>
+                                <th>填写率</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for field_name, field_stat in stats.field_stats.items() %}
+                            <tr>
+                                <td>{{ field_name }}</td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar {% if field_stat.fill_rate > 80 %}bg-success{% elif field_stat.fill_rate > 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             style="width: {{ field_stat.fill_rate }}%">
+                                            {{ field_stat.fill_rate }}%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无字段统计信息</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">快速操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="checkReplies()">
+                        <i class="fas fa-sync-alt me-2"></i>检查新回复
+                    </button>
+                    <a href="{{ url_for('task_replies', task_id=task.task_id) }}" class="btn btn-outline-info">
+                        <i class="fas fa-eye me-2"></i>查看详细回复状态
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 生成结果模态框 -->
+<div class="modal fade" id="generateResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">生成结果</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="generateResultContent">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 页面加载完成后获取数据预览
+$(document).ready(function() {
+    refreshPreview();
+});
+
+function refreshPreview() {
+    $('#dataPreview').html(`
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-2 text-muted">正在加载数据预览...</p>
+        </div>
+    `);
+    
+    $.ajax({
+        url: '/api/tasks/{{ task.task_id }}/data-preview',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                $('#dataPreview').html(response.html);
+            } else {
+                $('#dataPreview').html(`
+                    <div class="alert alert-danger text-center">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        加载失败: ${response.error}
+                    </div>
+                `);
+            }
+        }
+    });
+}
+
+function generateSummary() {
+    $.ajax({
+        url: '/api/tasks/{{ task.task_id }}/generate-summary',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                let html = `
+                    <div class="alert alert-success">
+                        <h6>${response.message}</h6>
+                        <p>汇总表已生成，点击下方链接下载：</p>
+                        <a href="${response.download_url}" class="btn btn-success mt-2" download>
+                            <i class="fas fa-download me-2"></i>下载汇总表
+                        </a>
+                    </div>
+                `;
+                $('#generateResultContent').html(html);
+                $('#generateResultModal').modal('show');
+            } else {
+                $('#generateResultContent').html(`
+                    <div class="alert alert-danger">
+                        <h6>生成失败</h6>
+                        <p>${response.error}</p>
+                    </div>
+                `);
+                $('#generateResultModal').modal('show');
+            }
+        }
+    });
+}
+
+function checkReplies() {
+    $.ajax({
+        url: '/api/tasks/{{ task.task_id }}/check-replies',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                alert('检查完成: ' + response.message);
+                location.reload();
+            } else {
+                alert('检查失败: ' + response.error);
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
+<!-- [file content end] -->

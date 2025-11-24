@@ -1,0 +1,249 @@
+<!-- [file name]: templates/ai_assistant.html -->
+{% extends "base.html" %}
+
+{% block title %}AI 数据助手{% endblock %}
+{% block header %}AI 智能数据分析{% endblock %}
+{% block subheader %}支持多轮对话，深入挖掘数据价值{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card shadow-lg" style="height: 80vh;">
+            <!-- 头部 -->
+            <div class="card-header bg-white p-3 border-bottom d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="input-group" style="max-width: 400px;">
+                        <span class="input-group-text bg-light border-0"><i class="fas fa-database"></i></span>
+                        <select id="taskSelector" class="form-select border-0 bg-light" onchange="clearContext()">
+                            <option value="" selected disabled>请先选择任务...</option>
+                            {% for task in tasks %}
+                                <option value="{{ task.task_id }}">{{ task.task_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <!-- 清除记忆按钮 -->
+                <button class="btn btn-sm btn-outline-danger" onclick="clearContext()" title="开启新对话">
+                    <i class="fas fa-trash-alt me-1"></i> 清空记忆
+                </button>
+            </div>
+
+            <!-- 聊天区 -->
+            <div class="card-body overflow-auto bg-light" id="chatBox">
+                <div class="d-flex flex-row mb-3">
+                    <div class="p-3 bg-white rounded-3 shadow-sm" style="max-width: 80%;">
+                        <p class="mb-0 fw-bold">👋 我是 DeepSeek 驱动的 AI 助手。</p>
+                        <p class="mb-0 mt-2 text-muted small">我可以记住我们的聊天内容。你可以尝试这样问：</p>
+                        <ul class="mb-0 text-muted small ps-3 mt-1">
+                            <li>第一句："帮我查一下经费超过 10 万的老师。"</li>
+                            <li>第二句："<b>他们</b> 之中谁是计算机系的？" (我会知道"他们"指谁)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区 -->
+            <div class="card-footer bg-white p-3">
+                <div class="input-group">
+                    <input type="text" id="userInput" class="form-control border-0 bg-light py-3 ps-4" placeholder="输入问题 (支持多轮对话)..." style="border-radius: 30px 0 0 30px;">
+                    <button class="btn btn-primary px-4" id="sendBtn" style="border-radius: 0 30px 30px 0;">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// === 全局变量 ===
+let chatHistory = []; 
+
+// === 页面加载时：恢复现场 ===
+$(document).ready(function() {
+    // 1. 尝试恢复选中的任务
+    const savedTaskId = localStorage.getItem('ai_selected_task');
+    if (savedTaskId) {
+        $('#taskSelector').val(savedTaskId);
+    }
+
+    // 2. 尝试恢复对话上下文数据
+    const savedHistory = localStorage.getItem('ai_chat_history');
+    if (savedHistory) {
+        chatHistory = JSON.parse(savedHistory);
+    }
+
+    // 3. 尝试恢复界面显示 (HTML)
+    const savedHtml = localStorage.getItem('ai_chat_html');
+    if (savedHtml && savedHtml.trim() !== "") {
+        $('#chatBox').html(savedHtml);
+        scrollToBottom();
+    } else {
+        // 如果没有存档，显示默认欢迎语
+        // (HTML里默认写了欢迎语，这里不需要额外操作，除非被清空过)
+    }
+});
+
+// === 保存状态到本地 (核心函数) ===
+function saveState() {
+    // 1. 保存选中的任务ID
+    const taskId = $('#taskSelector').val();
+    if (taskId) localStorage.setItem('ai_selected_task', taskId);
+
+    // 2. 保存给 AI 看的上下文数据
+    localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+
+    // 3. 保存给人看的 HTML (包括表格结果)
+    localStorage.setItem('ai_chat_html', $('#chatBox').html());
+}
+
+// === 清空记忆 ===
+function clearContext() {
+    chatHistory = [];
+    
+    // 清除本地存储
+    localStorage.removeItem('ai_chat_history');
+    localStorage.removeItem('ai_chat_html');
+    // localStorage.removeItem('ai_selected_task'); // 任务ID可以选择保留或清除，这里保留方便
+
+    // 重置界面
+    $('#chatBox').html(`
+        <div class="d-flex flex-row mb-3">
+            <div class="p-3 bg-white rounded-3 shadow-sm border-start border-4 border-danger">
+                <span class="text-muted">🗑️ 已清空记忆，开启全新对话。</span>
+            </div>
+        </div>
+    `);
+}
+
+// === 监听任务切换 ===
+$('#taskSelector').on('change', function() {
+    // 切换任务时，通常应该清空上下文，防止把 A 任务的表名用到 B 任务里
+    if (chatHistory.length > 0) {
+        if(confirm('切换任务会清空当前的对话记录，确定吗？')) {
+            clearContext();
+            saveState(); // 保存清空后的状态
+        } else {
+            // 恢复原来的选择 (稍微复杂点，这里简化处理)
+            location.reload(); 
+        }
+    }
+    // 保存新选的任务ID
+    localStorage.setItem('ai_selected_task', $(this).val());
+});
+
+// === 发送逻辑 ===
+$('#sendBtn').click(sendMessage);
+$('#userInput').keypress(function(e) { if(e.which == 13) sendMessage(); });
+
+function sendMessage() {
+    const taskId = $('#taskSelector').val();
+    const text = $('#userInput').val().trim();
+    
+    if (!taskId) { Utils.toast('warning', '请先选择任务'); return; }
+    if (!text) return;
+
+    // 1. 上屏用户问题
+    appendMessage('user', text);
+    $('#userInput').val('');
+    const loadingId = appendLoading();
+
+    // 2. 更新历史 & 保存
+    chatHistory.push({ "role": "user", "content": text });
+    saveState(); // <--- 保存
+
+    // 3. 发送请求
+    $.ajax({
+        url: '/api/ai/query',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ 
+            task_id: taskId, 
+            messages: chatHistory 
+        }),
+        success: function(res) {
+            removeLoading(loadingId);
+            if (res.success) {
+                // 4. 成功：更新历史 & 保存
+                // 记录 AI 的逻辑动作，让它下次知道自己干了啥
+                chatHistory.push({ "role": "assistant", "content": `Executed SQL: ${res.result.sql}` });
+                appendAIResult(res.result);
+            } else {
+                // 失败：回滚历史 & 保存
+                chatHistory.pop(); 
+                appendMessage('ai', '❌ 出错了: ' + res.error);
+            }
+            saveState(); // <--- 保存
+        },
+        error: function() {
+            removeLoading(loadingId);
+            chatHistory.pop();
+            appendMessage('ai', '❌ 网络连接失败');
+            saveState(); // <--- 保存
+        }
+    });
+}
+
+// === UI 渲染辅助函数 ===
+function appendMessage(role, text) {
+    const isUser = role === 'user';
+    const align = isUser ? 'justify-content-end' : 'justify-content-start';
+    const bg = isUser ? 'bg-primary text-white' : 'bg-white text-dark';
+    $('#chatBox').append(`
+        <div class="d-flex flex-row mb-3 ${align}">
+            <div class="p-3 rounded-3 shadow-sm ${bg}" style="max-width: 80%;">${text}</div>
+        </div>
+    `);
+    scrollToBottom();
+    saveState(); // 每次界面变动都保存
+}
+
+function appendAIResult(result) {
+    let html = `
+        <div class="d-flex flex-row mb-3">
+            <div class="p-3 bg-white rounded-3 shadow-sm w-100" style="max-width: 95%;">
+                <div class="mb-2 d-flex justify-content-between align-items-center border-bottom pb-2">
+                    <span class="badge bg-success">SQL执行成功 (${result.count}条)</span>
+                    <button class="btn btn-sm btn-link text-muted p-0" style="text-decoration:none" onclick="$(this).parent().next().toggle()">显示/隐藏SQL</button>
+                </div>
+                <div class="bg-light p-2 rounded mb-3 small font-monospace text-muted" style="display:none">
+                    ${result.sql}
+                </div>
+    `;
+    
+    if (result.data && result.data.length > 0) {
+        html += `<div class="table-responsive" style="max-height:400px;"><table class="table table-sm table-striped table-hover mb-0 small table-bordered"><thead><tr class="table-primary">`;
+        for (let key in result.data[0]) html += `<th>${key}</th>`;
+        html += `</tr></thead><tbody>`;
+        result.data.forEach(row => {
+            html += `<tr>`;
+            for (let key in row) html += `<td>${row[key]}</td>`;
+            html += `</tr>`;
+        });
+        html += `</tbody></table></div>`;
+    } else {
+        html += `<p class="text-muted mb-0 py-2">🤔 未查询到符合条件的数据。</p>`;
+    }
+    html += `</div></div>`;
+    $('#chatBox').append(html);
+    scrollToBottom();
+    saveState(); // 保存
+}
+
+function appendLoading() {
+    const id = 'ld-' + Date.now();
+    $('#chatBox').append(`<div id="${id}" class="d-flex flex-row mb-3"><div class="p-3 bg-white rounded-3 shadow-sm"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div><span class="text-muted small">AI 正在思考并查询数据库...</span></div></div>`);
+    scrollToBottom();
+    return id;
+}
+
+function removeLoading(id) { $('#' + id).remove(); }
+
+function scrollToBottom() { 
+    const box = document.getElementById('chatBox');
+    box.scrollTop = box.scrollHeight; 
+}
+</script>
+{% endblock %}

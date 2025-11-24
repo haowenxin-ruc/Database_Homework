@@ -16,7 +16,7 @@ from utils.excel_utils import parse_reply_excel, parse_excel_template
 from utils.data_summary import data_summary
 from utils.advanced_analysis import advanced_analysis
 from utils.dynamic_db import dynamic_db
-
+from utils.ai_utils import ai_service  # 记得引入
 def create_app():
     app = Flask(__name__)
     app.config.from_object(config)
@@ -145,8 +145,11 @@ def advanced_analysis_page(task_id):
         return redirect(url_for('task_summary', task_id=task_id))
 
 @app.route('/ai-assistant')
+
 def ai_assistant():
-    return render_template('ai_assistant.html')
+    # 获取所有任务，传给前端做下拉框
+    tasks = SummaryTask.query.order_by(SummaryTask.create_time.desc()).all()
+    return render_template('ai_assistant.html', tasks=tasks)
 
 
 # ==========================================
@@ -785,7 +788,29 @@ def update_record_data(record_id):
         print(f"❌ 保存失败: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/ai/query', methods=['POST'])
+def ai_query():
+    """AI 查询接口 (支持上下文)"""
+    try:
+        data = request.json
+        task_id = data.get('task_id')
+        # 前端传来的历史记录列表，最后一条是当前问题
+        history = data.get('messages') 
+        
+        if not task_id or not history:
+            return jsonify({'success': False, 'error': '参数错误'})
+            
+        success, result = ai_service.generate_and_execute_sql(task_id, history)
+        
+        if success:
+            return jsonify({'success': True, 'result': result})
+        else:
+            return jsonify({'success': False, 'error': result})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+      
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=True, host='0.0.0.0', port=5002)

@@ -1,63 +1,30 @@
-# [file name]: imap_utils.py
-# [file content begin]
+# [file name]: utils/imap_utils.py
 import imaplib
 import email
 from email.header import decode_header
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import config
-import base64
-
-# 修复IMAP UTF-8支持
-class UTF8IMAP4(imaplib.IMAP4_SSL):
-    """支持UTF-8编码的IMAP客户端"""
-    
-    def _encode(self, s):
-        """重写编码方法，强制使用UTF-8"""
-        if isinstance(s, str):
-            return s.encode('utf-8')
-        return s
-    
-    def search(self, charset, *criteria):
-        """重写搜索方法，支持UTF-8"""
-        if charset is None:
-            charset = 'UTF-8'
-        return super().search(charset, *criteria)
 
 class EmailReceiver:
     def __init__(self):
-        self.imap_server = config.IMAP_SERVER if hasattr(config, 'IMAP_SERVER') else 'imap.qq.com'
-        self.imap_port = config.IMAP_PORT if hasattr(config, 'IMAP_PORT') else 993
+        self.imap_server = 'imap.qq.com'
+        self.imap_port = 993
         self.username = config.MAIL_USERNAME
         self.password = config.MAIL_PASSWORD
         self.mail = None
     
     def connect(self):
-        """连接到IMAP服务器 - 使用UTF-8编码"""
+        """连接到IMAP服务器"""
         try:
-            print(f"连接到IMAP服务器: {self.imap_server}:{self.imap_port}")
-            self.mail = UTF8IMAP4(self.imap_server, self.imap_port)
+            # print(f"🔌 连接IMAP服务器: {self.imap_server}:{self.imap_port}")
+            self.mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
             self.mail.login(self.username, self.password)
-            print("✅ IMAP连接成功")
+            # print("✅ IMAP登录成功")
             return True
         except Exception as e:
             print(f"❌ IMAP连接失败: {str(e)}")
-            return False
-    
-    def select_folder(self, folder_name='INBOX'):
-        """选择邮箱文件夹"""
-        try:
-            print(f"选择文件夹: {folder_name}")
-            status, data = self.mail.select(folder_name)
-            if status == 'OK':
-                print(f"✅ 选择文件夹成功: {folder_name}")
-                return True
-            else:
-                print(f"❌ 选择文件夹失败: {status} - {data}")
-                return False
-        except Exception as e:
-            print(f"❌ 选择文件夹时出错: {str(e)}")
             return False
     
     def disconnect(self):
@@ -68,333 +35,190 @@ class EmailReceiver:
                 self.mail.logout()
             except:
                 pass
-    
-    def search_reply_emails(self, task_name):
-        """搜索特定任务的回复邮件 - 修复中文编码问题"""
+
+    def _get_imap_date_str(self, date_obj):
+        """生成兼容IMAP协议的日期字符串 (格式: 05-Nov-2024)"""
+        # 英文月份映射，防止系统locale导致生成中文月份
+        months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        day = date_obj.day
+        month = months[date_obj.month - 1]
+        year = date_obj.year
+        return f"{day}-{month}-{year}"
+
+    def search_reply_emails(self, task_name, lookback_days=30):
+        """
+        搜索回复邮件 (高效版)
+        :param task_name: 任务名称
+        :param lookback_days: 向前回溯的天数，默认30天，避免扫描全量邮件
+        """
         if not self.connect():
             return []
         
         try:
-            # 选择收件箱
-            if not self.select_folder('INBOX'):
-                print("❌ 无法选择收件箱")
+            self.mail.select('INBOX')
+            
+            # 1. 计算搜索起始时间 (极大地提高效率的关键)
+            since_date = datetime.now() - timedelta(days=lookback_days)
+            since_str = self._get_imap_date_str(since_date)
+            
+            # 2. 构建搜索命令
+            # 策略：搜索 (主题包含"汇总") AND (时间晚于 X)
+            # 我们不直接搜索完整任务名，因为任务名太长容易导致匹配失败
+            # 我们先搜 "汇总"，拉回来后再精确匹配
+            
+            # 注意：SUBJECT 后面的关键字如果有空格，需要引号包裹
+            # IMAP搜索格式: 'CHARSET UTF-8 (SINCE "01-Jan-2024" SUBJECT "keyword")'
+            
+            print(f"🔍 开始搜索: 最近 {lookback_days} 天, 主题包含 '汇总'...")
+            
+            # 构建查询语句
+            # 使用 SUBJECT "汇总" 比较稳妥，因为任务名通常包含中文标点，IMAP搜索容易挂
+            search_criteria = f'(SINCE "{since_str}" SUBJECT "汇总")'
+            
+            # 【核心修复】将查询字符串编码为 UTF-8 字节流
+            typ, data = self.mail.search('UTF-8', search_criteria.encode('utf-8'))
+            
+            if typ != 'OK':
+                print("❌ 服务器搜索响应错误")
                 return []
-            
-            # 方法1：使用UTF-8编码直接搜索中文
-            search_criteria = f'SUBJECT "{task_name}汇总"'
-            print(f"UTF-8搜索条件: {search_criteria}")
-            
-            try:
-                # 明确指定UTF-8字符集
-                status, messages = self.mail.search('UTF-8', search_criteria)
                 
-                if status == 'OK':
-                    email_ids = messages[0].split()
-                    print(f"✅ UTF-8搜索成功，找到 {len(email_ids)} 封相关邮件")
-                    
-                    emails = []
-                    for email_id in email_ids:
-                        email_data = self.fetch_email(email_id)
-                        if email_data:
-                            emails.append(email_data)
-                    
-                    return emails
-                else:
-                    print(f"UTF-8搜索失败: {status}")
-                    
-            except Exception as e:
-                print(f"UTF-8搜索异常: {str(e)}")
+            email_ids = data[0].split()
+            print(f"✅ 服务器初筛找到 {len(email_ids)} 封邮件")
             
-            # 方法2：使用编码后的中文搜索
-            print("尝试编码中文搜索...")
-            try:
-                # 将中文编码为MIME格式
-                encoded_task_name = self.encode_chinese_to_mime(task_name)
-                encoded_search = f'SUBJECT "{encoded_task_name}汇总"'
-                print(f"编码搜索条件: {encoded_search}")
-                
-                status, messages = self.mail.search(None, encoded_search)
-                
-                if status == 'OK':
-                    email_ids = messages[0].split()
-                    print(f"通过编码搜索找到 {len(email_ids)} 封邮件")
+            if not email_ids:
+                return []
+
+            # 3. 获取详情并本地精确过滤
+            results = []
+            # 倒序遍历（先处理最新的）
+            # 限制处理数量，防止卡死
+            max_process = 50 
+            
+            for idx, e_id in enumerate(reversed(email_ids)):
+                if idx >= max_process:
+                    print(f"⚠️ 达到处理上限 ({max_process}封)，停止扫描")
+                    break
+
+                try:
+                    # 只获取头信息来做二次筛选 (Body.PEEK[HEADER] 不会将邮件标记为已读)
+                    typ, header_data = self.mail.fetch(e_id, '(BODY.PEEK[HEADER])')
+                    if typ != 'OK': continue
                     
-                    # 过滤出真正相关的邮件
-                    emails = []
-                    for email_id in email_ids:
-                        email_data = self.fetch_email(email_id)
-                        if email_data and self.is_task_reply(email_data, task_name):
-                            emails.append(email_data)
+                    msg_header = email.message_from_bytes(header_data[0][1])
+                    subject = self._decode_str(msg_header.get("Subject", ""))
                     
-                    if emails:
-                        print(f"✅ 编码搜索成功，找到 {len(emails)} 封相关邮件")
-                        return emails
+                    # === 本地精确匹配逻辑 ===
+                    # 检查主题是否包含任务名（忽略空格）
+                    clean_subject = subject.replace(" ", "")
+                    clean_task_name = task_name.replace(" ", "")
+                    
+                    # 匹配逻辑：主题包含任务名 OR (包含"汇总"且包含部分任务关键字)
+                    is_match = False
+                    if clean_task_name in clean_subject:
+                        is_match = True
+                    elif "汇总" in clean_subject:
+                        # 简单的模糊匹配：任务名前4个字匹配也算
+                        if len(clean_task_name) > 4 and clean_task_name[:4] in clean_subject:
+                            is_match = True
+                    
+                    if not is_match:
+                        # print(f"  [跳过] 主题不匹配: {subject}")
+                        continue
                         
-            except Exception as e:
-                print(f"编码搜索异常: {str(e)}")
-            
-            # 方法3：搜索所有包含"汇总"的邮件，然后过滤
-            print("使用备用方法：搜索包含'汇总'的邮件并过滤")
-            try:
-                # 搜索所有包含"汇总"的邮件
-                status, messages = self.mail.search(None, 'SUBJECT "汇总"')
-                
-                if status != 'OK':
-                    print(f"❌ 搜索包含'汇总'的邮件失败: {status}")
-                    return []
-                
-                email_ids = messages[0].split()
-                print(f"找到 {len(email_ids)} 封包含'汇总'的邮件，开始过滤...")
-                
-                # 限制处理数量
-                max_emails = min(100, len(email_ids))  # 只处理前100封，避免性能问题
-                emails = []
-                
-                for i, email_id in enumerate(email_ids[:max_emails]):
-                    if i % 10 == 0:  # 每处理10封邮件打印一次进度
-                        print(f"过滤进度: {i+1}/{max_emails}")
+                    print(f"  [命中] 发现相关邮件: {subject}")
                     
-                    email_data = self.fetch_email(email_id)
-                    if email_data and self.is_task_reply(email_data, task_name):
-                        emails.append(email_data)
-                
-                print(f"过滤后找到 {len(emails)} 封相关邮件")
-                return emails
-                
-            except Exception as e:
-                print(f"备用方法搜索异常: {str(e)}")
+                    # 下载完整邮件内容
+                    full_data = self.fetch_email(e_id)
+                    if full_data:
+                        results.append(full_data)
+                        
+                except Exception as e:
+                    print(f"  [错误] 处理邮件ID {e_id} 失败: {e}")
+                    continue
             
-            # 方法4：搜索所有邮件，然后过滤
-            print("使用最终方法：搜索所有邮件并过滤")
-            try:
-                status, messages = self.mail.search(None, 'ALL')
-                
-                if status != 'OK':
-                    print(f"❌ 搜索所有邮件失败: {status}")
-                    return []
-                
-                email_ids = messages[0].split()
-                print(f"找到 {len(email_ids)} 封邮件，开始过滤...")
-                
-                # 限制处理数量
-                max_emails = min(200, len(email_ids))  # 只处理前200封，避免性能问题
-                emails = []
-                
-                for i, email_id in enumerate(email_ids[:max_emails]):
-                    if i % 20 == 0:  # 每处理20封邮件打印一次进度
-                        print(f"过滤进度: {i+1}/{max_emails}")
-                    
-                    email_data = self.fetch_email(email_id)
-                    if email_data and self.is_task_reply(email_data, task_name):
-                        emails.append(email_data)
-                
-                print(f"过滤后找到 {len(emails)} 封相关邮件")
-                return emails
-                
-            except Exception as e:
-                print(f"最终方法搜索异常: {str(e)}")
-            
-            return []
+            return results
             
         except Exception as e:
-            print(f"❌ 搜索邮件时出错: {str(e)}")
+            print(f"❌ 搜索流程异常: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return []
         finally:
             self.disconnect()
     
-    def encode_chinese_to_mime(self, text):
-        """将中文文本编码为MIME格式"""
+    def _decode_str(self, s):
+        """解码邮件头字符串"""
+        if not s:
+            return ""
         try:
-            # 使用email.header模块进行编码
-            from email.header import Header
-            encoded = Header(text, 'utf-8').encode()
-            return encoded
-        except Exception as e:
-            print(f"编码中文失败: {str(e)}")
-            return text
-    
-    def extract_ascii_part(self, text):
-        """提取文本中的英文和数字部分"""
-        import re
-        # 匹配英文、数字和下划线
-        ascii_pattern = r'[a-zA-Z0-9_]+'
-        matches = re.findall(ascii_pattern, text)
-        if matches:
-            # 返回最长的ASCII部分
-            return max(matches, key=len)
-        return None
-    
-    def is_task_reply(self, email_data, task_name):
-        """检查邮件是否是任务的回复"""
-        if not email_data:
-            return False
-        
-        subject = email_data.get('subject', '')
-        from_email = email_data.get('from_email', '')
-        
-        # 打印调试信息
-        print(f"检查邮件: 主题='{subject}', 发件人='{from_email}'")
-        
-        # 检查主题是否包含任务名称和"汇总"
-        if task_name in subject and '汇总' in subject:
-            print(f"✅ 主题匹配: {subject}")
-            return True
-        
-        # 检查是否包含任务名称的部分（处理可能的编码问题）
-        if any(part in subject for part in [task_name, task_name.replace(' ', ''), task_name[:4]]):
-            if '汇总' in subject:
-                print(f"✅ 部分匹配: {subject}")
-                return True
-        
-        # 检查发件人是否是系统中的教师
-        from app import app, db
-        from models import Teacher
-        
-        with app.app_context():
-            teacher = Teacher.query.filter_by(email=from_email).first()
-            if teacher:
-                # 如果是系统中的教师，且主题包含"汇总"，则认为是回复
-                if '汇总' in subject:
-                    print(f"✅ 教师匹配: {teacher.teacher_name}, 主题: {subject}")
-                    return True
-        
-        # 检查邮件正文是否包含任务相关信息
-        body = email_data.get('body', '')
-        if task_name in body and '汇总' in body:
-            print(f"✅ 正文匹配: {subject}")
-            return True
-        
-        print(f"❌ 不匹配: {subject}")
-        return False
-    
+            value, encoding = decode_header(s)[0]
+            if isinstance(value, bytes):
+                encoding = encoding if encoding else 'utf-8'
+                # 某些垃圾邮件编码可能是 'unknown-8bit'，回退到 utf-8 或 gbk
+                try:
+                    return value.decode(encoding)
+                except:
+                    return value.decode('utf-8', errors='ignore')
+            return value
+        except:
+            return str(s)
+
     def fetch_email(self, email_id):
-        """获取单封邮件的详细信息"""
+        """获取单封邮件的详细信息（包含附件）"""
         try:
             status, msg_data = self.mail.fetch(email_id, '(RFC822)')
+            if status != 'OK': return None
             
-            if status != 'OK':
-                return None
-            
-            # 解析邮件
             msg = email.message_from_bytes(msg_data[0][1])
-            
-            # 解码主题
-            subject, encoding = decode_header(msg["Subject"])[0]
-            if isinstance(subject, bytes):
-                subject = subject.decode(encoding if encoding else 'utf-8')
-            
-            # 获取发件人
-            from_header = msg.get("From")
-            sender_email = self.extract_email(from_header)
-            
-            # 获取日期
+            subject = self._decode_str(msg.get("Subject"))
+            from_email = self.extract_email(msg.get("From"))
             date_header = msg.get("Date")
-            email_date = self.parse_email_date(date_header)
             
-            # 提取邮件正文和附件
-            body = ""
+            # 解析日期
+            try:
+                from email.utils import parsedate_to_datetime
+                email_date = parsedate_to_datetime(date_header)
+                # 转为不带时区的本地时间 (简化处理)
+                if email_date.tzinfo is not None:
+                    email_date = email_date.astimezone().replace(tzinfo=None)
+            except:
+                email_date = datetime.now()
+
             attachments = []
             
             if msg.is_multipart():
                 for part in msg.walk():
-                    content_type = part.get_content_type()
-                    content_disposition = str(part.get("Content-Disposition"))
+                    content_disposition = str(part.get("Content-Disposition", ""))
                     
-                    # 提取正文
-                    if content_type == "text/plain" and "attachment" not in content_disposition:
-                        try:
-                            body = part.get_payload(decode=True).decode('utf-8', errors='ignore')
-                        except:
-                            try:
-                                body = part.get_payload(decode=True).decode('gbk', errors='ignore')
-                            except:
-                                body = "无法解码正文"
-                    
-                    # 提取附件
-                    elif "attachment" in content_disposition:
+                    # 只要附件
+                    if "attachment" in content_disposition:
                         filename = part.get_filename()
                         if filename:
-                            # 解码文件名
-                            decoded_filename = self.decode_filename(filename)
-                            print(f"原始文件名: {filename}")
-                            print(f"解码后文件名: {decoded_filename}")
-                            
+                            filename = self._decode_str(filename)
                             file_data = part.get_payload(decode=True)
+                            
                             attachments.append({
-                                'filename': decoded_filename,
+                                'filename': filename,
                                 'data': file_data
                             })
-            else:
-                # 非多部分邮件
-                try:
-                    body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
-                except:
-                    try:
-                        body = msg.get_payload(decode=True).decode('gbk', errors='ignore')
-                    except:
-                        body = "无法解码正文"
             
             return {
-                'id': email_id.decode(),
+                'id': email_id.decode() if isinstance(email_id, bytes) else email_id,
                 'subject': subject,
-                'from_email': sender_email,
+                'from_email': from_email,
                 'date': email_date,
-                'body': body,
                 'attachments': attachments
             }
-            
         except Exception as e:
-            print(f"❌ 解析邮件失败 (ID: {email_id}): {str(e)}")
+            print(f"解析详情失败: {e}")
             return None
-    
+
     def extract_email(self, from_header):
-        """从发件人头部信息中提取邮箱地址"""
-        if not from_header:
-            return ""
-        
-        # 使用正则表达式提取邮箱
-        match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', from_header)
-        if match:
-            return match.group(0)
-        return from_header
-    
-    def parse_email_date(self, date_header):
-        """解析邮件日期"""
-        if not date_header:
-            return datetime.now()
-        
-        try:
-            # 尝试解析各种日期格式
-            from email.utils import parsedate_to_datetime
-            return parsedate_to_datetime(date_header)
-        except:
-            return datetime.now()
-    
-    def decode_filename(self, filename):
-        """解码MIME编码的文件名"""
-        if not filename:
-            return filename
-            
-        try:
-            # 如果是MIME编码格式（如 =?UTF-8?B?...
-            if filename.startswith('=?') and '?=' in filename:
-                decoded_parts = decode_header(filename)
-                decoded_name = ""
-                for part, encoding in decoded_parts:
-                    if isinstance(part, bytes):
-                        if encoding:
-                            decoded_name += part.decode(encoding)
-                        else:
-                            decoded_name += part.decode('utf-8', errors='ignore')
-                    else:
-                        decoded_name += part
-                return decoded_name
-            else:
-                return filename
-        except Exception as e:
-            print(f"文件名解码失败: {filename}, 错误: {str(e)}")
-            return filename
+        """提取纯邮箱地址"""
+        if not from_header: return ""
+        match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', str(from_header))
+        return match.group(0) if match else str(from_header)
 
 # 创建全局实例
 email_receiver = EmailReceiver()
-# [file content end]

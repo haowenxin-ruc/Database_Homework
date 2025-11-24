@@ -8,13 +8,15 @@ import pandas as pd
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from sqlalchemy import text
+
 # 引入工具类
 from utils.email_utils import email_sender
 from utils.imap_utils import email_receiver
 from utils.excel_utils import parse_reply_excel, parse_excel_template
 from utils.data_summary import data_summary
-from utils.advanced_analysis import advanced_analysis  # 确保这里正确引用
+from utils.advanced_analysis import advanced_analysis
 from utils.dynamic_db import dynamic_db
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(config)
@@ -61,18 +63,26 @@ def index():
 
 @app.route('/teachers')
 def manage_teachers():
-    """教师管理页面"""
-    teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
-    return render_template('teachers.html', teachers=teachers)
+    """教师管理页面渲染路由"""
+    try:
+        # 获取所有教师，按创建时间倒序排列
+        teachers = Teacher.query.order_by(Teacher.created_at.desc()).all()
+        return render_template('teachers.html', teachers=teachers)
+    except Exception as e:
+        print(f"加载教师列表失败: {e}")
+        return render_template('teachers.html', teachers=[])
 
 @app.route('/tasks')
 def manage_tasks():
     """任务管理页面"""
-    tasks = SummaryTask.query.order_by(SummaryTask.create_time.desc()).all()
-    # 【新增】获取所有教师，传给前端
-    teachers = Teacher.query.order_by(Teacher.teacher_name).all()
-    
-    return render_template('tasks.html', tasks=tasks, teachers=teachers, now=datetime.now())
+    try:
+        tasks = SummaryTask.query.order_by(SummaryTask.create_time.desc()).all()
+        # 获取所有教师，传给前端用于新建任务时的选择
+        teachers = Teacher.query.order_by(Teacher.teacher_name).all()
+        return render_template('tasks.html', tasks=tasks, teachers=teachers, now=datetime.now())
+    except Exception as e:
+        print(f"加载任务列表失败: {e}")
+        return render_template('tasks.html', tasks=[], teachers=[], now=datetime.now())
 
 @app.route('/tasks/<int:task_id>/summary')
 def task_summary(task_id):
@@ -126,7 +136,7 @@ def task_replies(task_id):
 
 @app.route('/tasks/<int:task_id>/advanced-analysis')
 def advanced_analysis_page(task_id):
-    """高级分析页面（图表展示页）"""
+    """高级分析页面"""
     try:
         task = SummaryTask.query.get_or_404(task_id)
         return render_template('advanced_analysis.html', task=task)
@@ -227,15 +237,9 @@ def delete_teacher(teacher_id):
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
 
-# [file name]: app.py (添加到教师管理 API 区域)
-
-# [file name]: app.py
-
-# ... 其他代码 ...
-
-# 1. 确保有这个获取详情的接口 (用于回显数据)
 @app.route('/api/teachers/<int:teacher_id>', methods=['GET'])
 def get_teacher_details(teacher_id):
+    """获取教师详情 (用于编辑回显)"""
     try:
         teacher = Teacher.query.get_or_404(teacher_id)
         return jsonify({
@@ -252,47 +256,17 @@ def get_teacher_details(teacher_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-# 2. 【重点检查】确保有这个更新接口，并且 methods=['PUT']
-@app.route('/api/teachers/<int:teacher_id>', methods=['PUT'])
+@app.route('/api/teachers/<int:teacher_id>', methods=['POST'])
 def update_teacher(teacher_id):
-    try:
-        teacher = Teacher.query.get_or_404(teacher_id)
-        data = request.form # 获取前端表单数据
-        
-        # 打印日志方便调试
-        print(f"正在更新教师 {teacher_id}: {data}")
-        
-        new_email = data.get('email')
-        
-        # 查重逻辑：如果改了邮箱，且邮箱被别人占用了
-        existing = Teacher.query.filter_by(email=new_email).first()
-        if existing and existing.teacher_id != teacher_id:
-            return jsonify({'success': False, 'error': '该邮箱已被其他教师使用'})
-            
-        # 更新字段
-        teacher.teacher_name = data.get('teacher_name')
-        teacher.department = data.get('department')
-        teacher.email = new_email
-        teacher.phone = data.get('phone')
-        teacher.title = data.get('title')
-        
-        db.session.commit()
-        return jsonify({'success': True, 'message': '更新成功'})
-        
-    except Exception as e:
-        db.session.rollback()
-        print(f"更新失败: {e}") # 打印错误到后台
-        return jsonify({'success': False, 'error': str(e)})
-
-# ... 其他代码 ...
-    """更新教师信息"""
+    """更新教师信息 (POST)"""
     try:
         teacher = Teacher.query.get_or_404(teacher_id)
         data = request.form
+        print(f"收到更新教师请求 {teacher_id}: {data}") # Debug
         
         new_email = data.get('email')
         
-        # 检查邮箱是否被其他教师占用 (排除自己)
+        # 检查邮箱是否被其他教师占用
         existing = Teacher.query.filter_by(email=new_email).first()
         if existing and existing.teacher_id != teacher_id:
             return jsonify({'success': False, 'error': '该邮箱已被其他教师使用'})
@@ -310,13 +284,15 @@ def update_teacher(teacher_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
+
+
 # ==========================================
 # 3. API 路由 - 任务管理 (Tasks API)
 # ==========================================
 
 @app.route('/api/tasks', methods=['POST'])
 def add_task():
-    """创建汇总任务 + 动态建表"""
+    """创建汇总任务 + 动态建表 + 处理选中的教师"""
     try:
         task_name = request.form.get('task_name')
         if SummaryTask.query.filter_by(task_name=task_name).first():
@@ -333,7 +309,7 @@ def add_task():
         
         # 1. 保存任务以获取 task_id
         db.session.add(task)
-        db.session.flush() # 此时 task.task_id 已生成
+        db.session.flush()
         
         # 2. 处理模板并建表
         if 'template_file' in request.files:
@@ -353,29 +329,26 @@ def add_task():
                 
                 task.set_template_fields(fields)
                 
-                # 【新增】动态创建数据库物理表
+                # 动态创建数据库物理表
                 success, result = dynamic_db.create_task_table(task.task_id, fields)
                 if success:
-                    # 保存列名映射关系，供后续写入数据使用
                     task.set_column_mapping(result)
-                        # 2. 【新增】处理选中的教师
-        # request.form.getlist 可以获取多选框的所有值
+                else:
+                    db.session.rollback()
+                    return jsonify({'success': False, 'error': f'动态建表失败: {result}'})
+                    
+        # 3. 处理选中的教师 (预设发送列表)
         selected_teacher_ids = request.form.getlist('teacher_ids')
-        
-        if not selected_teacher_ids:
-            # 为了防止创建空任务，如果没有选人，默认不创建记录，或者强制要求选人
-            pass 
-        else:
+        if selected_teacher_ids:
             for tid in selected_teacher_ids:
                 teacher = Teacher.query.get(tid)
                 if teacher:
-                    # 预先创建记录，状态为 "未发送"
                     record = EmailRecord(
                         task_id=task.task_id,
                         teacher_id=teacher.teacher_id,
                         teacher_name=teacher.teacher_name,
                         department=teacher.department,
-                        status='未发送' # 新增一种状态
+                        status='未发送' # 初始状态
                     )
                     db.session.add(record)
         
@@ -385,21 +358,20 @@ def add_task():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
-    
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
     try:
         task = SummaryTask.query.get_or_404(task_id)
         
-        # ... 原有的删除逻辑 ...
+        # 删除回复详情
         records = EmailRecord.query.filter_by(task_id=task_id).all()
         ids = [r.record_id for r in records]
         if ids:
             TaskResponse.query.filter(TaskResponse.record_id.in_(ids)).delete(synchronize_session=False)
         EmailRecord.query.filter_by(task_id=task_id).delete()
         
-        # 【新增】删除动态物理表
+        # 删除动态物理表
         table_name = f"task_data_{task_id}"
         try:
             db.session.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
@@ -413,45 +385,28 @@ def delete_task(task_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
-    
+
 @app.route('/api/tasks/<int:task_id>/send-emails', methods=['POST'])
 def send_task_emails(task_id):
-    """
-    发送任务通知邮件
-    逻辑：只发送给状态为 '未发送' 的记录 (即创建任务时选中的教师)
-    """
+    """发送任务通知邮件 (只给'未发送'状态的教师)"""
     try:
         task = SummaryTask.query.get_or_404(task_id)
         
-        # 1. 查找该任务下，所有等待发送的记录
-        # 注意：这里只查 '未发送' 的。如果状态是 '未回复' (说明已发过) 或 '已回复'，则不重发。
         pending_records = EmailRecord.query.filter_by(task_id=task_id, status='未发送').all()
         
-        # 2. 检查是否没有待发送记录
         if not pending_records:
-            # 进一步检查：是不是因为这个任务根本没选人（或者是一个旧任务）
-            total_records = EmailRecord.query.filter_by(task_id=task_id).count()
-            if total_records == 0:
-                return jsonify({
-                    'success': False, 
-                    'message': '该任务未关联任何教师，无法发送。请删除任务重新创建并选择教师。'
-                })
-            else:
-                return jsonify({
-                    'success': True, 
-                    'message': '没有待发送的邮件 (所有选定教师均已发送通知)'
-                })
+            # 兼容处理：如果任务没选人，且没有任何记录
+            if EmailRecord.query.filter_by(task_id=task_id).count() == 0:
+                return jsonify({'success': False, 'message': '该任务未选择教师，无法发送。请重新创建任务。'})
+            return jsonify({'success': True, 'message': '没有待发送的邮件 (所有选定教师已发送)'})
 
         sent_count = 0
         failed_list = []
         
-        # 3. 遍历待发送列表
         for record in pending_records:
             teacher = Teacher.query.get(record.teacher_id)
-            if not teacher: 
-                continue
+            if not teacher: continue
             
-            # 构建邮件内容
             subject = f"【请回复】{task.task_name} - 数据汇总工作"
             content = f"""
 尊敬的{teacher.teacher_name}老师：
@@ -467,9 +422,76 @@ def send_task_emails(task_id):
 
 谢谢配合！
 """
-            # 发送邮件
             try:
                 if config.MAIL_SERVER:
+                    success = email_sender.send_email(teacher.email, subject, content, task.template_path)
+                else:
+                    print(f"[Dev] 模拟发送给 {teacher.email}")
+                    success = True
+
+                if success:
+                    record.status = '未回复'
+                    record.sent_time = datetime.now()
+                    sent_count += 1
+                else:
+                    failed_list.append(teacher.teacher_name)
+                    
+            except Exception as e:
+                print(f"发送异常: {e}")
+                failed_list.append(teacher.teacher_name)
+        
+        db.session.commit()
+        
+        msg = f"本次成功发送 {sent_count} 封邮件。"
+        if failed_list:
+            msg += f" 失败 {len(failed_list)} 人: {', '.join(failed_list[:5])}..."
+            
+        return jsonify({'success': True, 'message': msg})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f"系统错误: {str(e)}"})
+
+@app.route('/api/tasks/<int:task_id>/remind', methods=['POST'])
+def remind_task_emails(task_id):
+    """一键催办：给'未回复'的教师发送提醒邮件"""
+    try:
+        task = SummaryTask.query.get_or_404(task_id)
+        
+        # 1. 筛选目标：状态为 '未回复' 的记录
+        # (注意：'未发送'的是还没发过，'已回复'的不需要催，只有'未回复'的才是由于拖延没交的)
+        target_records = EmailRecord.query.filter_by(task_id=task_id, status='未回复').all()
+        
+        if not target_records:
+            return jsonify({'success': True, 'message': '没有需要催办的教师 (大家都回复了，或还没开始发送)'})
+
+        sent_count = 0
+        failed_list = []
+        
+        # 2. 准备催办文案
+        subject = f"【温馨提醒】{task.task_name} - 截止临近，请尽快回复"
+        
+        for record in target_records:
+            teacher = Teacher.query.get(record.teacher_id)
+            if not teacher: continue
+            
+            content = f"""
+尊敬的{teacher.teacher_name}老师：
+
+您好！
+这是一个温馨提醒。关于“{task.task_name}”的数据收集工作即将截止。
+系统显示您尚未回复。
+
+截止时间：{task.deadline.strftime('%Y-%m-%d %H:%M') if task.deadline else '未设置'}
+
+烦请您尽快查阅之前的邮件，填写附件中的 Excel 模板并【回复本邮件】。
+（如果附件已丢失，请查阅本邮件附件）
+
+如已回复请忽略此邮件。谢谢配合！
+"""
+            try:
+                if config.MAIL_SERVER:
+                    # 发送邮件 (带上附件，万一老师把之前的删了)
                     success = email_sender.send_email(
                         to_email=teacher.email,
                         subject=subject,
@@ -477,39 +499,32 @@ def send_task_emails(task_id):
                         attachment_path=task.template_path
                     )
                 else:
-                    # 开发模式模拟发送
-                    print(f"[Dev] 模拟发送邮件给: {teacher.email}")
+                    print(f"[Dev] 模拟催办: {teacher.email}")
                     success = True
 
                 if success:
-                    # 【关键】发送成功，状态流转：未发送 -> 未回复
-                    record.status = '未回复'
+                    # 仅更新发送时间，状态保持 '未回复'
                     record.sent_time = datetime.now()
                     sent_count += 1
                 else:
-                    # 发送失败，记录名字，状态保持 '未发送' 以便重试
                     failed_list.append(teacher.teacher_name)
                     
             except Exception as e:
-                print(f"发送给 {teacher.teacher_name} 异常: {e}")
+                print(f"催办异常 {teacher.teacher_name}: {e}")
                 failed_list.append(teacher.teacher_name)
         
-        # 4. 提交数据库更改
         db.session.commit()
         
-        # 5. 返回结果
-        msg = f"本次成功发送 {sent_count} 封邮件。"
+        msg = f"已向 {sent_count} 位未回复的教师发送了提醒。"
         if failed_list:
-            msg += f" 失败 {len(failed_list)} 人: {', '.join(failed_list[:5])}..."
-            if len(failed_list) > 5: msg += " 等"
-            return jsonify({'success': True, 'message': msg, 'warning': True})
+            msg += f" 发送失败: {', '.join(failed_list[:3])}..."
             
         return jsonify({'success': True, 'message': msg})
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'error': f"系统错误: {str(e)}"})
-    
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/tasks/<int:task_id>/check-replies')
 def check_task_replies(task_id):
     """检查回复 + 同步写入动态表"""
@@ -519,7 +534,6 @@ def check_task_replies(task_id):
         processed_count = 0
         new_replies = []
         
-        # 获取列映射关系
         col_mapping = task.get_column_mapping()
         
         for email_data in emails:
@@ -528,14 +542,12 @@ def check_task_replies(task_id):
             
             record = EmailRecord.query.filter_by(task_id=task_id, teacher_id=teacher.teacher_id).first()
             
-            # 如果没有记录，自动创建（应对自发回复的情况）
             if not record:
                  record = EmailRecord(task_id=task_id, teacher_id=teacher.teacher_id, 
                                       teacher_name=teacher.teacher_name, department=teacher.department)
                  db.session.add(record)
                  db.session.flush()
 
-            # 如果已经回复过，跳过 (或者你可以选择允许更新，这里暂定跳过)
             if record.status == '已回复': continue
             
             if email_data['attachments']:
@@ -545,11 +557,11 @@ def check_task_replies(task_id):
                         reply_data = parse_reply_excel(att['data'], fields)
                         
                         if reply_data:
-                            # 1. 写入原有 EAV 表 (TaskResponse) - 保持前端兼容
+                            # 1. 写入原有 EAV 表
                             for k, v in reply_data.items():
                                 db.session.add(TaskResponse(record_id=record.record_id, field_name=k, field_value=v))
                             
-                            # 2. 【新增】写入动态物理表 (task_data_xxx) - 供 AI 使用
+                            # 2. 写入动态物理表
                             teacher_info = {
                                 'teacher_id': teacher.teacher_id,
                                 'teacher_name': teacher.teacher_name,
@@ -559,7 +571,6 @@ def check_task_replies(task_id):
                             }
                             dynamic_db.save_response(task.task_id, teacher_info, reply_data, col_mapping)
                             
-                            # 更新状态
                             record.status = '已回复'
                             record.replied_time = email_data['date']
                             record.reply_title = email_data['subject']
@@ -574,6 +585,7 @@ def check_task_replies(task_id):
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/tasks/<int:task_id>/fields')
 def get_task_fields(task_id):
     try:
@@ -588,101 +600,70 @@ def inspect_task_table(task_id):
     try:
         task = SummaryTask.query.get_or_404(task_id)
         table_name = f"task_data_{task_id}"
-        
-        # 1. 获取逻辑映射关系 (Excel -> DB)
         mapping = task.get_column_mapping()
         
-        # 2. 获取物理表结构 (直接查询 SQLite 系统表)
         try:
-            # PRAGMA table_info 是 SQLite 查看表结构的命令
             result = db.session.execute(text(f"PRAGMA table_info({table_name})"))
             columns_info = [{'cid': row[0], 'name': row[1], 'type': row[2]} for row in result]
             table_exists = len(columns_info) > 0
-        except Exception as e:
+        except Exception:
             table_exists = False
             columns_info = []
 
-        # 3. 如果表存在，查询前 1 条数据看看
         sample_data = {}
         if table_exists:
             try:
-                # 获取第一行数据
                 row = db.session.execute(text(f"SELECT * FROM {table_name} LIMIT 1")).first()
                 if row:
-                    # 将 row 转换为字典 (row.keys() 在某些版本可能不可用，需配合 columns_info)
-                    # SQLAlchemy row 可以直接转 dict 或者通过下标访问
-                    # 这里简单处理，假设 columns_info 顺序和 row 一致
                     for idx, col in enumerate(columns_info):
                         sample_data[col['name']] = row[idx]
-            except Exception as e:
-                print(f"获取样本数据失败: {e}")
+            except Exception:
+                pass
 
         return jsonify({
             'success': True,
             'task_name': task.task_name,
             'table_name': table_name,
             'table_exists': table_exists,
-            'column_mapping': mapping, # 逻辑映射
-            'physical_columns': columns_info, # 物理列
-            'sample_data': sample_data # 样本数据
+            'column_mapping': mapping,
+            'physical_columns': columns_info,
+            'sample_data': sample_data
         })
-        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-# [file name]: app.py
-
 
 # ==========================================
 # 4. API 路由 - 数据分析与图表 (Analysis API)
-# 【重要】这里完全保留了你之前的所有图表数据接口
 # ==========================================
 
 @app.route('/api/tasks/<int:task_id>/analysis/comprehensive')
 def get_comprehensive_analysis(task_id):
-    """获取综合分析报告（包含所有图表数据）"""
     try:
         data = advanced_analysis.get_comprehensive_analysis(task_id)
-        if data:
-            return jsonify({'success': True, 'analysis': data})
-        return jsonify({'success': False, 'error': '分析数据获取失败'})
+        if data: return jsonify({'success': True, 'analysis': data})
+        return jsonify({'success': False, 'error': '无数据'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ... (trend, department, response-time 接口同理，为节省篇幅已在前面提供，这里确保它们存在) ...
+# 为了确保代码完整性，这里补充上这几个短接口
 @app.route('/api/tasks/<int:task_id>/analysis/trend')
 def get_trend_analysis(task_id):
-    """获取趋势分析（折线图数据）"""
-    try:
-        trend_data = advanced_analysis.get_reply_trend_analysis(task_id)
-        if trend_data:
-            return jsonify({'success': True, 'trend': trend_data})
-        return jsonify({'success': False, 'error': '趋势数据获取失败'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+    data = advanced_analysis.get_reply_trend_analysis(task_id)
+    return jsonify({'success': True, 'trend': data} if data else {'success': False, 'error': '无数据'})
 
 @app.route('/api/tasks/<int:task_id>/analysis/department')
 def get_department_analysis(task_id):
-    """获取部门分析（饼图/柱状图数据）"""
-    try:
-        department_data = advanced_analysis.get_department_analysis(task_id)
-        if department_data:
-            return jsonify({'success': True, 'departments': department_data})
-        return jsonify({'success': False, 'error': '部门数据获取失败'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+    data = advanced_analysis.get_department_analysis(task_id)
+    return jsonify({'success': True, 'departments': data} if data else {'success': False, 'error': '无数据'})
 
 @app.route('/api/tasks/<int:task_id>/analysis/response-time')
 def get_response_time_analysis(task_id):
-    """获取回复时间分析（直方图数据）"""
-    try:
-        time_data = advanced_analysis.get_response_time_analysis(task_id)
-        if time_data:
-            return jsonify({'success': True, 'time_analysis': time_data})
-        return jsonify({'success': False, 'error': '时间分析数据获取失败'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+    data = advanced_analysis.get_response_time_analysis(task_id)
+    return jsonify({'success': True, 'time_analysis': data} if data else {'success': False, 'error': '无数据'})
 
 # ==========================================
-# 5. API 路由 - 导出与下载
+# 5. API 路由 - 导出与下载与编辑
 # ==========================================
 
 @app.route('/api/tasks/<int:task_id>/generate-summary')
@@ -707,10 +688,11 @@ def download_summary(filename):
 
 @app.route('/api/tasks/<int:task_id>/data-preview')
 def get_task_data_preview(task_id):
-    """汇总数据预览表格"""
+    """汇总数据预览表格 (含编辑按钮)"""
     try:
         task = SummaryTask.query.get(task_id)
-        records = EmailRecord.query.filter_by(task_id=task_id, status='已回复').limit(10).all()
+        records = EmailRecord.query.filter_by(task_id=task_id, status='已回复').limit(50).all()
+        
         if not records:
             return jsonify({'success': True, 'html': '<div class="text-center p-4 text-muted">暂无回复数据</div>'})
         
@@ -720,25 +702,90 @@ def get_task_data_preview(task_id):
         
         for idx, rec in enumerate(records, 1):
             t = Teacher.query.get(rec.teacher_id)
-            row = {'序号': idx, '姓名': t.teacher_name, '部门': t.department}
+            row = {
+                'record_id': rec.record_id, 
+                '序号': idx, 
+                '姓名': t.teacher_name, 
+                '部门': t.department
+            }
             responses = TaskResponse.query.filter_by(record_id=rec.record_id).all()
             resp_dict = {r.field_name: r.field_value for r in responses}
             
-            display_cols = field_names[:5] if field_names else list(resp_dict.keys())[:5]
-            for col in display_cols:
+            for col in (field_names if field_names else list(resp_dict.keys())):
                 row[col] = resp_dict.get(col, '')
             data.append(row)
             
-        headers = list(data[0].keys())
-        html = '<table class="table table-sm table-striped"><thead><tr>' + \
-               ''.join([f'<th>{h}</th>' for h in headers]) + '</tr></thead><tbody>' + \
-               ''.join(['<tr>' + ''.join([f'<td>{row[k]}</td>' for k in headers]) + '</tr>' for row in data]) + \
-               '</tbody></table>'
+        headers = ['序号', '姓名', '部门'] + (field_names if field_names else []) + ['操作']
+        html = '<div class="table-responsive"><table class="table table-sm table-striped table-hover align-middle"><thead><tr>'
+        for h in headers: html += f'<th class="text-nowrap">{h}</th>'
+        html += '</tr></thead><tbody>'
+        
+        for row in data:
+            html += '<tr>'
+            html += f'<td>{row["序号"]}</td><td>{row["姓名"]}</td><td>{row["部门"]}</td>'
+            for field in (field_names if field_names else []):
+                val = row.get(field, '')
+                display_val = (val[:20] + '...') if val and len(val) > 20 else val
+                html += f'<td>{display_val}</td>'
+            html += f'<td><button class="btn btn-sm btn-outline-primary py-0" onclick="openEditRecordModal({row["record_id"]})"><i class="fas fa-edit"></i> 修改</button></td></tr>'
+            
+        html += '</tbody></table></div>'
         return jsonify({'success': True, 'html': html})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/records/<int:record_id>/data', methods=['GET'])
+def get_record_data(record_id):
+    """人工补录 - 获取数据"""
+    try:
+        record = EmailRecord.query.get_or_404(record_id)
+        task = SummaryTask.query.get(record.task_id)
+        responses = TaskResponse.query.filter_by(record_id=record_id).all()
+        current_data = {r.field_name: r.field_value for r in responses}
+        return jsonify({'success': True, 'fields': task.get_template_fields(), 'data': current_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/records/<int:record_id>/update', methods=['POST'])
+def update_record_data(record_id):
+    """人工补录 - 保存 (双写)"""
+    print(f"🔍 收到修正: Record {record_id}")
+    try:
+        record = EmailRecord.query.get_or_404(record_id)
+        task = SummaryTask.query.get(record.task_id)
+        teacher = Teacher.query.get(record.teacher_id)
+        form_data = request.form.to_dict()
+        
+        # 1. 更新EAV
+        TaskResponse.query.filter_by(record_id=record_id).delete()
+        clean_data = {}
+        for k, v in form_data.items():
+            if k != 'record_id':
+                db.session.add(TaskResponse(record_id=record_id, field_name=k, field_value=v, field_type='string'))
+                clean_data[k] = v
+        
+        # 2. 更新物理表
+        if task.column_mapping:
+            from utils.dynamic_db import dynamic_db
+            col_mapping = task.get_column_mapping()
+            teacher_info = {
+                'teacher_id': teacher.teacher_id, 'teacher_name': teacher.teacher_name,
+                'department': teacher.department, 'email': teacher.email,
+                'reply_time': record.replied_time or datetime.now()
+            }
+            dynamic_db.save_response(task.task_id, teacher_info, clean_data, col_mapping)
+        
+        record.status = '已回复'
+        if not record.replied_time: record.replied_time = datetime.now()
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': '保存成功'})
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ 保存失败: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)

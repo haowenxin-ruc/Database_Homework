@@ -9,6 +9,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # 邮件配置（稍后填写）
+    IMAP_SERVER = 'imap.qq.com'
     MAIL_SERVER = 'smtp.qq.com'
     MAIL_PORT = 465
     MAIL_USE_TLS = False  # 465端口不使用TLS，使用SSL

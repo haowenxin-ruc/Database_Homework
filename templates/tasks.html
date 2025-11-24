@@ -75,7 +75,9 @@
                                 <button class="btn btn-sm btn-outline-secondary" onclick="inspectTable({{ task.task_id }})" title="检查数据库表结构">
                                     <i class="fas fa-database"></i>
                                 </button>
-                                
+                                <button class="btn btn-sm btn-outline-warning" title="一键催办 (给未回复的人)" onclick="remindTaskEmails({{ task.task_id }}, '{{ task.task_name }}')">
+                                    <i class="fas fa-bell"></i>
+                                </button>
                                 <button class="btn btn-sm btn-outline-danger" title="删除" onclick="deleteTask({{ task.task_id }}, '{{ task.task_name }}')">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -390,6 +392,41 @@ function renderInspectResult(data) {
     `;
 
     $('#inspectContent').html(html);
+}
+
+function remindTaskEmails(taskId, taskName) {
+    Swal.fire({
+        title: '确认催办?',
+        text: `将向 "${taskName}" 任务中所有【未回复】的教师发送温馨提醒邮件。`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ffc107', // 黄色
+        confirmButtonText: '立即催办',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // 显示加载中
+            if(typeof Utils !== 'undefined') Utils.showLoading('正在发送提醒邮件...');
+            
+            $.ajax({
+                url: `/api/tasks/${taskId}/remind`,
+                method: 'POST',
+                success: function(response) {
+                    if(typeof Utils !== 'undefined') Utils.hideLoading();
+                    
+                    if (response.success) {
+                        Swal.fire('催办完成', response.message, 'success');
+                    } else {
+                        Swal.fire('催办失败', response.error, 'error');
+                    }
+                },
+                error: function(xhr) {
+                    if(typeof Utils !== 'undefined') Utils.hideLoading();
+                    Swal.fire('网络错误', '无法连接到服务器', 'error');
+                }
+            });
+        }
+    });
 }
 </script>
 

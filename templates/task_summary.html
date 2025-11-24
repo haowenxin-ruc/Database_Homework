@@ -176,6 +176,32 @@
         </div>
     </div>
 </div>
+<!-- 数据修正模态框 -->
+<div class="modal fade" id="editDataModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit text-primary me-2"></i>修正/补录数据
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editDataForm">
+                <input type="hidden" id="edit_record_id" name="record_id">
+                
+                <div class="modal-body">
+                    <!-- 这里的输入框将由 JS 动态生成 -->
+                    <div id="dynamicFormFields"></div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">保存修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -257,6 +283,113 @@ function checkReplies() {
         }
     });
 }
+// 1. 打开编辑窗口
+function openEditRecordModal(recordId) {
+    $('#edit_record_id').val(recordId);
+    $('#dynamicFormFields').html('<div class="text-center"><div class="spinner-border text-primary"></div></div>');
+    $('#editDataModal').modal('show');
+    
+    // 获取字段定义和当前数据
+    $.ajax({
+        url: `/api/records/${recordId}/data`,
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                renderEditForm(response.fields, response.data);
+            } else {
+                $('#dynamicFormFields').html(`<div class="alert alert-danger">${response.error}</div>`);
+            }
+        },
+        error: function() {
+            $('#dynamicFormFields').html(`<div class="alert alert-danger">网络错误</div>`);
+        }
+    });
+}
+
+// 2. 渲染动态表单
+function renderEditForm(fields, currentData) {
+    let html = '';
+    
+    if (!fields || fields.length === 0) {
+        html = '<div class="alert alert-warning">该任务没有定义模板字段，无法编辑数据。</div>';
+    } else {
+        fields.forEach(field => {
+            const value = currentData[field.name] || ''; // 有值填值，没值留空
+            const isRequired = field.required ? 'required' : '';
+            const star = field.required ? '<span class="text-danger">*</span>' : '';
+            
+            html += `
+                <div class="mb-3">
+                    <label class="form-label fw-bold">${field.name} ${star}</label>
+                    <input type="text" class="form-control" name="${field.name}" value="${value}" ${isRequired}>
+                </div>
+            `;
+        });
+    }
+    
+    $('#dynamicFormFields').html(html);
+}
+
+// 3. 提交保存
+$('#editDataForm').on('submit', function(e) {
+    e.preventDefault();
+    const recordId = $('#edit_record_id').val();
+    
+    // 按钮变更为加载状态
+    const btn = $(this).find('button[type="submit"]');
+    const originalText = btn.text();
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> 保存中...');
+    
+    $.ajax({
+        url: `/api/records/${recordId}/update`,
+        method: 'POST', // 【重点】确保是 POST
+        data: $(this).serialize(),
+        success: function(response) {
+            btn.prop('disabled', false).text(originalText);
+            
+            if (response.success) {
+                $('#editDataModal').modal('hide');
+                
+                // 刷新预览表格
+                if (typeof refreshPreview === 'function') {
+                    refreshPreview();
+                } else {
+                    location.reload();
+                }
+
+                // 提示成功
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('成功', '数据已修正', 'success');
+                } else {
+                    alert('数据已修正');
+                }
+            } else {
+                // 后端逻辑错误
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('保存失败', response.error, 'error');
+                } else {
+                    alert('保存失败: ' + response.error);
+                }
+            }
+        },
+        error: function(xhr, status, error) {
+            btn.prop('disabled', false).text(originalText);
+            
+            // 【重点】显示详细错误信息
+            console.error("提交错误:", xhr.responseText);
+            let errorMsg = `HTTP ${xhr.status} 错误`;
+            
+            if (xhr.status === 500) errorMsg = "服务器内部错误 (500)，请查看后台日志";
+            if (xhr.status === 404) errorMsg = "接口未找到 (404)";
+            
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('网络请求失败', errorMsg, 'error');
+            } else {
+                alert('网络请求失败: ' + errorMsg);
+            }
+        }
+    });
+});
 </script>
 {% endblock %}
 <!-- [file content end] -->

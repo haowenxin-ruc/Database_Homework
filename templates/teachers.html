@@ -1,4 +1,4 @@
-<!-- [file name]: teachers.html -->
+<!-- [file name]: templates/teachers.html -->
 {% extends "base.html" %}
 
 {% block title %}教师管理{% endblock %}
@@ -10,9 +10,11 @@
         <p class="text-muted">管理学院教师通讯录及基础信息</p>
     </div>
     <div class="btn-group">
+        <!-- 批量导入按钮 -->
         <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importTeacherModal">
             <i class="fas fa-file-import me-2"></i>批量导入
         </button>
+        <!-- 添加教师按钮 -->
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTeacherModal">
             <i class="fas fa-user-plus me-2"></i>添加教师
         </button>
@@ -30,7 +32,7 @@
 </div>
 
 <!-- 教师列表 -->
-<div class="card">
+<div class="card shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0" id="teacherTable">
@@ -54,13 +56,15 @@
                         <td>{{ teacher.title or '-' }}</td>
                         <td class="text-end pe-4">
                             <div class="btn-group">
-                                <!-- 1. 这里是你刚才问的编辑按钮 -->
+                                <!-- 编辑按钮 -->
                                 <button class="btn btn-sm btn-outline-primary" onclick="editTeacher({{ teacher.teacher_id }})" title="编辑">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTeacher({{ teacher.teacher_id }}, '{{ teacher.teacher_name }}')">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
+                                <!-- 删除按钮 -->
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteTeacher({{ teacher.teacher_id }}, '{{ teacher.teacher_name }}')" title="删除">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                     {% else %}
@@ -77,7 +81,9 @@
     </div>
 </div>
 
-<!-- 添加教师模态框 -->
+<!-- ================= 模态框区域 ================= -->
+
+<!-- 1. 添加教师模态框 -->
 <div class="modal fade" id="addTeacherModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -112,6 +118,7 @@
                                 <option value="副教授">副教授</option>
                                 <option value="讲师">讲师</option>
                                 <option value="助教">助教</option>
+                                <option value="行政人员">行政人员</option>
                             </select>
                         </div>
                     </div>
@@ -124,9 +131,35 @@
         </div>
     </div>
 </div>
-<!-- [file name]: templates/teachers.html (新增部分) -->
 
-<!-- 编辑教师模态框 -->
+<!-- 2. 批量导入模态框 -->
+<div class="modal fade" id="importTeacherModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">批量导入教师</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="importTeacherForm">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <small><i class="fas fa-info-circle me-1"></i> 请上传 .xlsx 或 .csv 文件。<br>必需列：<strong>姓名</strong>, <strong>邮箱</strong>, <strong>所在系</strong>。</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择文件</label>
+                        <input type="file" class="form-control" name="file" accept=".xlsx,.xls,.csv" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-success">开始导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 3. 编辑教师模态框 -->
 <div class="modal fade" id="editTeacherModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -135,9 +168,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form id="editTeacherForm">
-                <!-- 隐藏域存放ID -->
                 <input type="hidden" id="edit_teacher_id" name="teacher_id">
-                
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -178,37 +209,19 @@
     </div>
 </div>
 
-<!-- 批量导入模态框 -->
-<div class="modal fade" id="importTeacherModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">批量导入教师</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="importTeacherForm">
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <small><i class="fas fa-info-circle me-1"></i> 请上传 .xlsx 或 .csv 文件。必需列：<strong>姓名</strong>, <strong>邮箱</strong>, <strong>所在系</strong>。</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">选择文件</label>
-                        <input type="file" class="form-control" name="file" accept=".xlsx,.xls,.csv" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="submit" class="btn btn-success">开始导入</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 前端实时搜索
+// 通用：显示加载 (防止 Utils 未定义)
+function showLoading(msg) {
+    if(typeof Utils !== 'undefined') Utils.showLoading(msg);
+}
+function hideLoading() {
+    if(typeof Utils !== 'undefined') Utils.hideLoading();
+}
+
+// 1. 搜索功能
 $('#teacherSearch').on('keyup', function() {
     var value = $(this).val().toLowerCase();
     $("#teacherTable tbody tr").filter(function() {
@@ -216,36 +229,34 @@ $('#teacherSearch').on('keyup', function() {
     });
 });
 
-// 添加教师
+// 2. 添加教师
 $('#addTeacherForm').on('submit', function(e) {
     e.preventDefault();
-    Utils.showLoading('正在添加...');
-    
+    showLoading('正在保存...');
     $.ajax({
         url: '/api/teachers',
         method: 'POST',
         data: $(this).serialize(),
         success: function(response) {
-            Utils.hideLoading();
+            hideLoading();
             if (response.success) {
-                Swal.fire('成功', '教师添加成功', 'success').then(() => location.reload());
+                location.reload();
             } else {
-                Swal.fire('错误', response.error, 'error');
+                alert('添加失败: ' + response.error);
             }
         },
         error: function() {
-            Utils.hideLoading();
-            Swal.fire('错误', '网络请求失败', 'error');
+            hideLoading();
+            alert('网络错误');
         }
     });
 });
 
-// 批量导入
+// 3. 批量导入
 $('#importTeacherForm').on('submit', function(e) {
     e.preventDefault();
     var formData = new FormData(this);
-    Utils.showLoading('正在导入数据，请稍候...');
-    
+    showLoading('正在导入...');
     $.ajax({
         url: '/api/teachers/import',
         method: 'POST',
@@ -253,110 +264,96 @@ $('#importTeacherForm').on('submit', function(e) {
         processData: false,
         contentType: false,
         success: function(response) {
-            Utils.hideLoading();
+            hideLoading();
             if (response.success) {
-                Swal.fire('导入成功', response.message, 'success').then(() => location.reload());
+                alert(response.message);
+                location.reload();
             } else {
-                Swal.fire('导入失败', response.error, 'error');
+                alert('导入失败: ' + response.error);
             }
         },
         error: function() {
-            Utils.hideLoading();
-            Swal.fire('错误', '网络请求失败', 'error');
+            hideLoading();
+            alert('网络错误');
         }
     });
 });
 
-// 删除教师
-function deleteTeacher(id, name) {
-    Swal.fire({
-        title: '确定删除?',
-        text: `将删除教师 "${name}" 及其所有相关的回复记录！此操作不可恢复。`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: '是的，删除',
-        cancelButtonText: '取消'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            Utils.showLoading('正在删除...');
-            $.ajax({
-                url: '/api/teachers/' + id,
-                method: 'DELETE',
-                success: function(response) {
-                    Utils.hideLoading();
-                    if (response.success) {
-                        Utils.toast('success', '删除成功');
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        Swal.fire('删除失败', response.error, 'error');
-                    }
-                }
-            });
-        }
-    });
-}
-// [file name]: templates/teachers.html (Script 部分新增)
-
-// 1. 打开编辑窗口并回显数据
+// 4. 编辑教师：获取详情
 function editTeacher(id) {
-    Utils.showLoading('正在获取数据...');
-    
+    showLoading('读取中...');
     $.ajax({
         url: '/api/teachers/' + id,
         method: 'GET',
         success: function(response) {
-            Utils.hideLoading();
+            hideLoading();
             if (response.success) {
                 const data = response.data;
-                // 填充表单
                 $('#edit_teacher_id').val(data.teacher_id);
                 $('#edit_teacher_name').val(data.teacher_name);
                 $('#edit_department').val(data.department);
                 $('#edit_email').val(data.email);
                 $('#edit_phone').val(data.phone);
-                $('#edit_title').val(data.title); // 如果职称不在选项中，select会自动留空或选默认，这符合预期
-                
-                // 显示模态框
+                $('#edit_title').val(data.title);
                 $('#editTeacherModal').modal('show');
             } else {
-                Swal.fire('获取失败', response.error, 'error');
+                alert('获取数据失败: ' + response.error);
             }
         },
         error: function() {
-            Utils.hideLoading();
-            Swal.fire('错误', '网络请求失败', 'error');
+            hideLoading();
+            alert('网络请求失败');
         }
     });
 }
 
-// 2. 提交修改
+// 5. 编辑教师：提交修改 (POST)
 $('#editTeacherForm').on('submit', function(e) {
     e.preventDefault();
     const id = $('#edit_teacher_id').val();
-    Utils.showLoading('正在保存修改...');
-    
+    showLoading('正在保存...');
     $.ajax({
         url: '/api/teachers/' + id,
-        method: 'PUT', // 使用 PUT 方法更新
+        method: 'POST', // 强制使用 POST
         data: $(this).serialize(),
         success: function(response) {
-            Utils.hideLoading();
+            hideLoading();
             if (response.success) {
                 $('#editTeacherModal').modal('hide');
-                Swal.fire('成功', '教师信息已更新', 'success').then(() => {
-                    location.reload(); // 刷新页面显示最新数据
-                });
+                alert('修改成功');
+                location.reload();
             } else {
-                Swal.fire('保存失败', response.error, 'error');
+                alert('修改失败: ' + response.error);
             }
         },
-        error: function() {
-            Utils.hideLoading();
-            Swal.fire('错误', '网络请求失败', 'error');
+        error: function(xhr) {
+            hideLoading();
+            alert('网络错误 (' + xhr.status + ')');
         }
     });
 });
+
+// 6. 删除教师
+function deleteTeacher(id, name) {
+    if(!confirm('确定要删除教师 "' + name + '" 吗？此操作不可恢复。')) return;
+    
+    showLoading('正在删除...');
+    $.ajax({
+        url: '/api/teachers/' + id,
+        method: 'DELETE',
+        success: function(response) {
+            hideLoading();
+            if (response.success) {
+                location.reload();
+            } else {
+                alert('删除失败: ' + response.error);
+            }
+        },
+        error: function() {
+            hideLoading();
+            alert('网络错误');
+        }
+    });
+}
 </script>
 {% endblock %}

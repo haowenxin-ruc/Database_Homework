@@ -14,11 +14,11 @@ class Config:
     IMAP_PORT=993
     MAIL_PORT = 465
     MAIL_USE_TLS = False  # 465端口不使用TLS，使用SSL
-    MAIL_USERNAME = '2379296267@qq.com'
-    MAIL_PASSWORD = 'xyuovjmlzdbyebff'  # 替换为你的邮箱授权码
+    MAIL_USERNAME = '35456163@qq.com'
+    MAIL_PASSWORD = 'tqitheqfwtytbgif'  # 替换为你的邮箱授权码
     
     # 大模型API配置（稍后填写）
-    AI_API_KEY = '' 
+    AI_API_KEY = 'sk-0f22e2fce25d460386004554d114e65f' 
     AI_BASE_URL = 'https://api.deepseek.com'  # DeepSeek官方地址
     AI_MODEL_NAME = 'deepseek-chat' # 或者 deepseek-reasoner
 

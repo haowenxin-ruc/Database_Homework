@@ -102,9 +102,17 @@ def task_replies(task_id):
     """任务回复状态详情页面"""
     try:
         task = SummaryTask.query.get_or_404(task_id)
+
+        # 1. 获取已回复记录
         replied_records = EmailRecord.query.filter_by(task_id=task_id, status='已回复').all()
-        not_replied_records = EmailRecord.query.filter_by(task_id=task_id, status='未回复').all()
         
+        # 2. 获取未完成记录 (包含 '未回复' 和 '未发送' 的，确保刚添加的老师也能显示)
+        not_replied_records = EmailRecord.query.filter(
+            EmailRecord.task_id == task_id, 
+            EmailRecord.status != '已回复'
+        ).all()
+        
+        # 3. 构建已回复列表
         replied_list = []
         for r in replied_records:
             teacher = Teacher.query.get(r.teacher_id)
@@ -112,14 +120,18 @@ def task_replies(task_id):
                 replied_list.append({
                     'teacher_name': teacher.teacher_name,
                     'department': teacher.department,
-                    'reply_time': r.replied_time.strftime('%Y-%m-%d %H:%M') if r.replied_time else '未知'
+                    'reply_time': r.replied_time.strftime('%Y-%m-%d %H:%M') if r.replied_time else '未知',
+                    'teacher_id': teacher.teacher_id
                 })
 
         not_replied_list = []
         for r in not_replied_records:
             teacher = Teacher.query.get(r.teacher_id)
             if teacher:
-                not_replied_list.append({'teacher_name': teacher.teacher_name, 'department': teacher.department, 'email': teacher.email})
+                not_replied_list.append({'teacher_id': teacher.teacher_id,'teacher_name': teacher.teacher_name, 'department': teacher.department, 'email': teacher.email,'status': r.status})
+        
+        # 5. 获取所有教师列表 (用于"追加教师"的弹窗选项)
+        all_teachers = Teacher.query.order_by(Teacher.teacher_name).all() # <--- 【新增】
 
         total = len(replied_list) + len(not_replied_list)
         stats = {
@@ -129,7 +141,7 @@ def task_replies(task_id):
             'reply_rate': round((len(replied_list) / total * 100), 2) if total > 0 else 0
         }
         
-        return render_template('task_replies.html', task=task, statistics=stats, replied_teachers=replied_list, not_replied_teachers=not_replied_list)
+        return render_template('task_replies.html', task=task, statistics=stats, replied_teachers=replied_list, not_replied_teachers=not_replied_list,all_teachers=all_teachers)
     except Exception as e:
         flash(f'加载回复详情失败: {str(e)}')
         return redirect(url_for('manage_tasks'))
@@ -527,6 +539,75 @@ def remind_task_emails(task_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)})
+
+# ==========================================
+# 追加教师
+@app.route('/api/tasks/<int:task_id>/add-teachers', methods=['POST'])
+def add_teachers_to_task(task_id):
+    """【新功能】任务发布后，追加教师"""
+    try:
+        task = SummaryTask.query.get_or_404(task_id)
+        # 从前端获取选中的教师ID列表
+        teacher_ids = request.form.getlist('teacher_ids[]') # 注意前端传参可能带[]
+        if not teacher_ids:
+            # 兼容另一种传参方式
+            teacher_ids = request.json.get('teacher_ids') if request.is_json else request.form.getlist('teacher_ids')
+
+        count = 0
+        for tid in teacher_ids:
+            # 检查是否已经存在
+            exists = EmailRecord.query.filter_by(task_id=task_id, teacher_id=tid).first()
+            if not exists:
+                teacher = Teacher.query.get(tid)
+                if teacher:
+                    # 创建新的记录，状态默认是 '未发送'
+                    new_record = EmailRecord(
+                        task_id=task.task_id,
+                        teacher_id=teacher.teacher_id,
+                        teacher_name=teacher.teacher_name,
+                        department=teacher.department,
+                        status='未发送' 
+                    )
+                    db.session.add(new_record)
+                    count += 1
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'成功追加 {count} 位教师'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+#移除教师
+@app.route('/api/tasks/<int:task_id>/remove-teacher', methods=['POST'])
+def remove_teacher_from_task(task_id):
+    """【新功能】任务发布后，移除某位教师"""
+    try:
+        # 获取要移除的教师ID
+        teacher_id = request.form.get('teacher_id')
+        
+        # 找到这条记录
+        record = EmailRecord.query.filter_by(task_id=task_id, teacher_id=teacher_id).first()
+        
+        if not record:
+            return jsonify({'success': False, 'error': '该任务中找不到这位教师'})
+            
+        # 安全检查：如果老师已经回复了，是否允许删除？
+        # 这里为了防止误删数据，做一个判断
+        if record.status == '已回复':
+            return jsonify({'success': False, 'error': '该教师已回复数据，禁止移除！请先删除其回复记录。'})
+
+        # 删除对应的动态数据（如果有的话）
+        # TaskResponse.query.filter_by(record_id=record.record_id).delete() # 既然没回复，通常没这个
+        
+        # 删除记录
+        db.session.delete(record)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': '已将教师从任务列表中移除'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+# ==========================================
 
 @app.route('/api/tasks/<int:task_id>/check-replies')
 def check_task_replies(task_id):

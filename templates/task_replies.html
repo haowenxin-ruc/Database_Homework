@@ -4,8 +4,21 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>回复状态 - {{ task.task_name }}</h2>
     <div>
+        <h2>回复状态 - {{ task.task_name }}</h2>
+        <p class="text-muted mb-0">管理该任务的参与人员及回复情况</p>
+    </div>
+    <div class="btn-group">
+        <!-- 【位置1：追加教师按钮】在这里！就在标题右边 -->
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addTeacherModal">
+            <i class="fas fa-user-plus me-2"></i>追加教师
+        </button>
+
+        <!-- 【新增】发送通知按钮：只发给状态为"未发送"的人 -->
+        <button class="btn btn-outline-success" onclick="sendPendingEmails()">
+            <i class="fas fa-paper-plane me-2"></i>发送通知
+        </button>
+
         <button class="btn btn-primary" onclick="checkReplies()">
             <i class="fas fa-sync-alt me-2"></i>检查新回复
         </button>
@@ -15,67 +28,44 @@
     </div>
 </div>
 
-<!-- 统计信息 -->
+<!-- 统计信息卡片区域 (保持不变) -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card text-white bg-primary">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ statistics.total }}</h4>
-                        <p>总发送数</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-paper-plane fa-2x"></i>
-                    </div>
+                    <div><h4>{{ statistics.total }}</h4><p class="mb-0">总发送数</p></div>
+                    <div class="align-self-center"><i class="fas fa-paper-plane fa-2x opacity-50"></i></div>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
         <div class="card text-white bg-success">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ statistics.replied }}</h4>
-                        <p>已回复</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-check-circle fa-2x"></i>
-                    </div>
+                    <div><h4>{{ statistics.replied }}</h4><p class="mb-0">已回复</p></div>
+                    <div class="align-self-center"><i class="fas fa-check-circle fa-2x opacity-50"></i></div>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
         <div class="card text-white bg-warning">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ statistics.not_replied }}</h4>
-                        <p>未回复</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-clock fa-2x"></i>
-                    </div>
+                    <div><h4>{{ statistics.not_replied }}</h4><p class="mb-0">未回复</p></div>
+                    <div class="align-self-center"><i class="fas fa-clock fa-2x opacity-50"></i></div>
                 </div>
             </div>
         </div>
     </div>
-    
     <div class="col-md-3">
         <div class="card text-white bg-info">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
-                    <div>
-                        <h4>{{ statistics.reply_rate }}%</h4>
-                        <p>回复率</p>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-chart-line fa-2x"></i>
-                    </div>
+                    <div><h4>{{ statistics.reply_rate }}%</h4><p class="mb-0">回复率</p></div>
+                    <div class="align-self-center"><i class="fas fa-chart-line fa-2x opacity-50"></i></div>
                 </div>
             </div>
         </div>
@@ -83,16 +73,17 @@
 </div>
 
 <div class="row">
+    <!-- 左侧：已回复列表 -->
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">已回复教师 ({{ replied_teachers|length }})</h5>
+        <div class="card h-100">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-check me-2"></i>已回复教师 ({{ replied_teachers|length }})</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 {% if replied_teachers %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
+                <div class="table-responsive" style="max-height: 500px;">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light sticky-top">
                             <tr>
                                 <th>姓名</th>
                                 <th>部门</th>
@@ -103,56 +94,121 @@
                             {% for teacher in replied_teachers %}
                             <tr>
                                 <td>{{ teacher.teacher_name }}</td>
-                                <td>{{ teacher.department }}</td>
-                                <td>{{ teacher.reply_time }}</td>
+                                <td><span class="badge bg-light text-dark">{{ teacher.department }}</span></td>
+                                <td><small>{{ teacher.reply_time }}</small></td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted text-center py-3">暂无回复</p>
+                <div class="text-center py-5 text-muted">暂无回复数据</div>
                 {% endif %}
             </div>
         </div>
     </div>
     
+    <!-- 右侧：未回复列表 -->
     <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">未回复教师 ({{ not_replied_teachers|length }})</h5>
+        <div class="card h-100">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-hourglass-half me-2"></i>未回复教师 ({{ not_replied_teachers|length }})</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 {% if not_replied_teachers %}
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
+                <div class="table-responsive" style="max-height: 500px;">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light sticky-top">
                             <tr>
                                 <th>姓名</th>
                                 <th>部门</th>
-                                <th>邮箱</th>
+                                <th>状态</th>
+                                <th class="text-end">操作</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for teacher in not_replied_teachers %}
                             <tr>
-                                <td>{{ teacher.teacher_name }}</td>
+                                <td class="fw-bold">{{ teacher.teacher_name }}</td>
                                 <td>{{ teacher.department }}</td>
-                                <td>{{ teacher.email }}</td>
+                                <td>
+                                    {% if teacher.status == '未发送' %}
+                                        <span class="badge bg-secondary">待发送</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">未回复</span>
+                                    {% endif %}
+                                </td>
+                                <!-- 【位置2：移除按钮】在这里！每一行的最后 -->
+                                <td class="text-end">
+                                    <!-- ↓↓↓ 这里加了单引号，VS Code 就不会报错了 ↓↓↓ -->
+                                    <button class="btn btn-sm btn-outline-danger border-0" 
+                                            onclick="removeTeacher('{{ task.task_id }}', '{{ teacher.teacher_id }}', '{{ teacher.teacher_name }}')"
+                                            title="从本任务中移除">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted text-center py-3">所有教师均已回复</p>
+                <div class="text-center py-5 text-success">
+                    <i class="fas fa-check-circle fa-3x mb-3"></i>
+                    <p>太棒了！所有教师都已回复。</p>
+                </div>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
 
-<!-- 检查结果模态框 -->
+<!-- 新增追加教师模态框 (默认隐藏，点击按钮后出现) -->
+<div class="modal fade" id="addTeacherModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">追加教师到当前任务</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addTeacherForm">
+                    <!-- 隐藏字段传 task_id -->
+                    <input type="hidden" name="task_id" value="{{ task.task_id }}">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">选择教师</label>
+                        <!-- 一个简单的搜索框 -->
+                        <input type="text" class="form-control form-control-sm mb-2" id="teacherSearch" placeholder="输入姓名或部门搜索..." onkeyup="filterTeachers()">
+                        
+                        <div class="border rounded p-2" style="height: 300px; overflow-y: auto; background: #f8f9fa;">
+                            {% if all_teachers %}
+                                {% for teacher in all_teachers %}
+                                <div class="form-check teacher-item">
+                                    <input class="form-check-input" type="checkbox" name="teacher_ids[]" 
+                                           value="{{ teacher.teacher_id }}" id="add_t_{{ teacher.teacher_id }}">
+                                    <label class="form-check-label w-100" for="add_t_{{ teacher.teacher_id }}">
+                                        {{ teacher.teacher_name }} 
+                                        <small class="text-muted float-end">{{ teacher.department }}</small>
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="text-center text-muted mt-5">系统里没有其他教师信息</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitAddTeachers()">确定添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 检查结果模态框 (原有的) -->
 <div class="modal fade" id="checkResultModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -160,9 +216,7 @@
                 <h5 class="modal-title">检查结果</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="checkResultContent">
-                <!-- 动态内容 -->
-            </div>
+            <div class="modal-body" id="checkResultContent"></div>
         </div>
     </div>
 </div>
@@ -170,35 +224,138 @@
 
 {% block scripts %}
 <script>
+// 提交追加教师的JS函数
+function submitAddTeachers() {
+    var form = $('#addTeacherForm');
+    var taskId = form.find('input[name="task_id"]').val();
+    
+    // 检查是否有选中
+    if (form.find('input[type="checkbox"]:checked').length === 0) {
+        Swal.fire('提示', '请至少选择一位教师', 'warning');
+        return;
+    }
+
+    // 调用后端接口
+    $.ajax({
+        url: `/api/tasks/${taskId}/add-teachers`, 
+        method: 'POST',
+        data: form.serialize(),
+        success: function(res) {
+            if (res.success) {
+                Swal.fire('成功', res.message, 'success').then(() => location.reload());
+            } else {
+                Swal.fire('失败', res.error, 'error');
+            }
+        },
+        error: function() {
+            Swal.fire('错误', '网络请求失败', 'error');
+        }
+    });
+}
+
+
+// 【新增】发送邮件给新添加的教师
+function sendPendingEmails() {
+    // 这里的 {{ task.task_id }} 是 Jinja2 模板语法，后端会渲染成数字
+    var taskId = '{{ task.task_id }}'; 
+    
+    Swal.fire({
+        title: '准备发送',
+        text: "系统将自动识别并只发送给【未发送】状态的新教师，不会重复打扰其他人。",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#198754', // 绿色
+        confirmButtonText: '立即发送',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // 显示加载中
+            if(typeof Utils !== 'undefined') Utils.showLoading('正在发送...');
+            
+            $.ajax({
+                url: `/api/tasks/${taskId}/send-emails`, // 调用后端的发送接口
+                method: 'POST',
+                success: function(res) {
+                    if(typeof Utils !== 'undefined') Utils.hideLoading();
+                    
+                    if (res.success) {
+                        // 发送成功后刷新页面，你会看到状态从"待发送"变成了"未回复"
+                        Swal.fire('发送完成', res.message, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('遇到问题', res.message || res.error, 'warning');
+                    }
+                },
+                error: function() {
+                    if(typeof Utils !== 'undefined') Utils.hideLoading();
+                    Swal.fire('错误', '网络连接超时', 'error');
+                }
+            });
+        }
+    });
+}
+
+// 移除教师的JS函数
+function removeTeacher(taskId, teacherId, teacherName) {
+    Swal.fire({
+        title: '确认移除?',
+        text: `确定不需要 ${teacherName} 参与此任务吗？`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        confirmButtonText: '是的，移除',
+        cancelButtonText: '取消'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                url: `/api/tasks/${taskId}/remove-teacher`,
+                method: 'POST',
+                data: { teacher_id: teacherId },
+                success: function(res) {
+                    if (res.success) {
+                        location.reload(); 
+                    } else {
+                        Swal.fire('无法移除', res.error, 'error');
+                    }
+                },
+                error: function() {
+                    Swal.fire('错误', '网络请求失败', 'error');
+                }
+            });
+        }
+    });
+}
+
+// 搜索过滤功能
+function filterTeachers() {
+    var value = $('#teacherSearch').val().toLowerCase();
+    $(".teacher-item").filter(function() {
+        $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+    });
+}
+
+// 原有的检查回复函数
 function checkReplies() {
     $.ajax({
         url: '/api/tasks/{{ task.task_id }}/check-replies',
         method: 'GET',
         success: function(response) {
             if (response.success) {
-                let html = `<div class="alert alert-success">
-                    <h6>${response.message}</h6>
-                    <p>总共找到 ${response.total_emails} 封相关邮件</p>`;
-                
+                let html = `<div class="alert alert-success"><h6>${response.message}</h6>`;
                 if (response.new_replies && response.new_replies.length > 0) {
-                    html += `<hr><h6>新回复教师:</h6><ul>`;
+                    html += `<hr><h6>新回复:</h6><ul>`;
                     response.new_replies.forEach(reply => {
-                        html += `<li>${reply.teacher_name} (${reply.reply_time})</li>`;
+                        html += `<li>${reply.name} (${reply.time})</li>`;
                     });
                     html += `</ul>`;
                 }
-                
                 html += `</div>`;
-                
                 $('#checkResultContent').html(html);
                 $('#checkResultModal').modal('show');
-                
-                // 3秒后刷新页面
-                setTimeout(() => {
-                    location.reload();
-                }, 3000);
+                if (response.new_replies && response.new_replies.length > 0) {
+                    setTimeout(() => location.reload(), 2000);
+                }
             } else {
-                $('#checkResultContent').html(`<div class="alert alert-danger">检查失败: ${response.error}</div>`);
+                $('#checkResultContent').html(`<div class="alert alert-danger">${response.error}</div>`);
                 $('#checkResultModal').modal('show');
             }
         }
